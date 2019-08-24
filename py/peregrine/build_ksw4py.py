@@ -84,6 +84,7 @@ ksw_extz_t * align(const char *tseq,
       int sc_mis,
       int gapo,
       int gape);
+void free(void *ptr);
 """)
 
 srcs = glob.glob(f'{basedir}/ksw2/ksw2*.c') + [f'{basedir}/ksw2/align.c']
