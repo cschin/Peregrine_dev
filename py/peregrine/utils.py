@@ -52,22 +52,22 @@ def get_shimmers_from_seq(seq, rid=0,
                           k=16, w=80):
     assert levels <= 2
     c_null = shimmer_ffi.NULL
-    mmers = shimmer_ffi.new("mm128_v *")
-    shimmer4py.mm_sketch(c_null, seq, len(seq), w, k, rid, 0, mmers)
+    mmers_L0 = Shimmer()
+    shimmer4py.mm_sketch(c_null, seq, len(seq), w, k, rid, 0, mmers_L0.mmers)
     if levels == 0:
-        return mmers
+        return mmers_L0
     elif levels == 1:
-        mmers_L1 = shimmer_ffi.new("mm128_v *")
-        shimmer4py.mm_reduce(mmers, mmers_L1, reduction_factor)
-        shimmer_ffi.release(mmers)
+        mmers_L1 = Shimmer()
+        shimmer4py.mm_reduce(mmers_L0.mmers, mmers_L1.mmers, reduction_factor)
+        del mmers_L0
         return mmers_L1
     elif levels == 2:
-        mmers_L1 = shimmer_ffi.new("mm128_v *")
+        mmers_L1 = Shimmer()
         mmers_L2 = Shimmer()
         shimmer4py.mm_reduce(mmers, mmers_L1, reduction_factor)
         shimmer4py.mm_reduce(mmers_L1, mmers_L2.mmers, reduction_factor)
-        shimmer_ffi.release(mmers_L1)
-        shimmer_ffi.release(mmers)
+        del mmers_L1
+        del mmers_L0
         return mmers_L2
 
 
@@ -156,15 +156,15 @@ def get_best_seqs(seqs, best_n=20, levels=2, k=16, w=80):
                                           rid=0,
                                           levels=levels,
                                           k=k, w=w)
+        _shimmers0 = shimmers0.mmers
         seq_mmer_set = set()
-        for i in range(shimmers0.n):
-            mmer = mmer2tuple(shimmers0.a[i])[0]
+        for i in range(_shimmers0.n):
+            mmer = mmer2tuple(_shimmers0.a[i])[0]
             seq_mmer_set.add(mmer)
         seq_mmer_set = list(seq_mmer_set)
         mer_count.update(seq_mmer_set)
         all_mmers.append(seq_mmer_set)
-        shimmer4py.free(shimmers0.a)
-        shimmer_ffi.release(shimmers0)
+        del shimmers0
 
     match_mmer_count = []
     for i, mmers in enumerate(all_mmers):
@@ -214,8 +214,7 @@ def get_cns_from_reads(seqs, sort_reads=True, best_n=20,
                                           k=k, w=w)
         alns_0 = get_shimmer_alns(shimmers0, shimmers1, 0)
         alns_0.sort(key=lambda x: -len(x[0]))
-        shimmer4py.free(shimmers1.a)
-        shimmer_ffi.release(shimmers1)
+        del shimmers1
 
         rseq = rc(seq)
         rid = i * 2 + 1
@@ -225,8 +224,7 @@ def get_cns_from_reads(seqs, sort_reads=True, best_n=20,
                                           k=k, w=w)
         alns_1 = get_shimmer_alns(shimmers0, shimmers1, 0)
         alns_1.sort(key=lambda x: -len(x[0]))
-        shimmer4py.free(shimmers1.a)
-        shimmer_ffi.release(shimmers1)
+        del shimmers1
 
         if len(alns_0) > 0 and len(alns_1) > 0:
             if len(alns_0[0][0]) >= len(alns_1[0][0]):
@@ -254,8 +252,9 @@ def get_cns_from_reads(seqs, sort_reads=True, best_n=20,
                                             len(seq0), 1)
     cns_seq = falcon_ffi.string(cns.sequence)
     falcon4py.free_consensus_data(cns)
-    shimmer4py.free(shimmers0.a)
-    shimmer_ffi.release(shimmers0)
+    # shimmer4py.free(shimmers0.a)
+    # shimmer_ffi.release(shimmers0)
+    del shimmers0
     for i in range(aln_count):
         falcon4py.free_align_tags(tags[i])
     falcon_ffi.release(tags)
