@@ -64,8 +64,8 @@ def get_shimmers_from_seq(seq, rid=0,
     elif levels == 2:
         mmers_L1 = Shimmer()
         mmers_L2 = Shimmer()
-        shimmer4py.mm_reduce(mmers, mmers_L1, reduction_factor)
-        shimmer4py.mm_reduce(mmers_L1, mmers_L2.mmers, reduction_factor)
+        shimmer4py.mm_reduce(mmers_L0.mmers, mmers_L1.mmers, reduction_factor)
+        shimmer4py.mm_reduce(mmers_L1.mmers, mmers_L2.mmers, reduction_factor)
         del mmers_L1
         del mmers_L0
         return mmers_L2
