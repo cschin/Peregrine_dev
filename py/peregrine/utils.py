@@ -2,13 +2,13 @@ import sys, os
 import numpy as np
 import mmap
 from collections import namedtuple
-from peregrine._shimmer4py import ffi as shimmer_ffi
-from peregrine._shimmer4py import lib as shimmer4py
-from peregrine._falcon4py import ffi as falcon_ffi
-from peregrine._falcon4py import lib as falcon4py
+from ._shimmer4py import ffi as shimmer_ffi
+from ._shimmer4py import lib as shimmer4py
+from ._falcon4py import ffi as falcon_ffi
+from ._falcon4py import lib as falcon4py
 from collections import Counter
-from peregrine._ksw4py import ffi as ksw4py_ffi
-from peregrine._ksw4py import lib as ksw4py
+from ._ksw4py import ffi as ksw4py_ffi
+from ._ksw4py import lib as ksw4py
 
 
 rmap = dict(list(zip(b"ACGT", b"TGCA")))
@@ -292,7 +292,7 @@ class SequenceDatabase(object):
                                                     length=rlen,
                                                     offset=offset)
 
-    def get_subseq_by_rid(self, rid, start, end, direction=0):
+    def get_subseq_by_rid(self, rid, start=-1, end=-1, direction=0):
         if start == -1 and end == -1:
             start = 0
             end = self.index_data[rid].length
@@ -305,9 +305,12 @@ class SequenceDatabase(object):
             seq = b"".join([self.basemap[c & 0x0F] for c in self.seqdb[s:e]])
         return seq
 
-    def get_subseq_by_name(self, rname, start, end, direction=0):
+    def get_subseq_by_name(self, rname, start=-1, end=-1, direction=0):
         rid = self.name2rid[rname]
         return self.get_subseq_by_rid(rid, start, end, direction=direction)
+
+    def get_seq_index_by_name(self, rname):
+        return self.index_data[self.name2rid[rname]]
 
     def __del__(self):
         self.seqdb.close()
