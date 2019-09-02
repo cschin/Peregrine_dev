@@ -59,7 +59,7 @@ class SeqDBAligner(object):
                                             ALT=[vcfpy.Substitution("SNV",
                                                                     chr(b1))],
                                             QUAL=50, FILTER=["PASS"],
-                                            INFO={"QPOS": [qp + bgn1 + 2]})
+                                            INFO={"QPOS": [qp + bgn1 + 1]})
                         vcf_records.append(r)
                         count += 1
                     rp += 1
@@ -80,7 +80,7 @@ class SeqDBAligner(object):
                                  REF=r_base,
                                  ALT=[vcfpy.Substitution("INS", ins_seq)],
                                  QUAL=50, FILTER=["PASS"],
-                                 INFO={"QPOS": [qpos + bgn1 + 2]})
+                                 INFO={"QPOS": [qpos + bgn1 + 1]})
                 vcf_records.append(r)
                 qpos += c[1]
             elif c[0] == "D":
@@ -96,7 +96,7 @@ class SeqDBAligner(object):
                                  REF=del_seq,
                                  ALT=[vcfpy.Substitution("DEL", q_base)],
                                  QUAL=50, FILTER=["PASS"],
-                                 INFO={"QPOS": [qpos + bgn1 + 2]})
+                                 INFO={"QPOS": [qpos + bgn1 + 1]})
                 vcf_records.append(r)
                 rpos += c[1]
         return vcf_records
@@ -113,6 +113,10 @@ class SeqDBAligner(object):
         seq0 = self.sdb0.get_subseq_by_name(sname0, bgn0, end0)
         seq1 = self.sdb1.get_subseq_by_name(sname1, bgn1, end1,
                                             direction=direction)
+        if bgn0 == -1:
+            bgn0 = 0
+        if bgn1 == -1:
+            bgn1 = 0
         if direction == 1:
             parameters["direction"] = 0
 
