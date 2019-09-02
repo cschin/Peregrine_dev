@@ -317,10 +317,10 @@ class SequenceDatabase(object):
         self._f.close()
 
 
-def get_cigar(seq0, seq1, score=(1,-2, 2, 1)):
+def get_cigar(seq0, seq1, score=(2,-4, 4, 2)):
     r = ksw4py.align(seq0, seq1, score[0], score[1], score[2], score[3])
     cigars = []
     for i in range(r.n_cigar):
         cigars.append(("MID"[r.cigar[i] & 0xf], r.cigar[i] >> 4))
     ksw4py.free(r.cigar)
-    return cigars
+    return cigars, r.score
