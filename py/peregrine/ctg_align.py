@@ -43,61 +43,62 @@ class SeqDBAligner(object):
                                         max_repeat=max_repeat)
         return shimmer_alns
 
-    def _get_vcf_from_cigar(self, seq0, seq1, sname0, bgn0,
+    def _get_vcf_from_cigar(self, seq0, seq1, sname0, bgn0, bgn1,
                             rpos, qpos, cigars):
         vcf_records = []
         for c in cigars:
-            rpos_, qpos_ = rpos, qpos
             if c[0] == "M":
+                rp = rpos
+                qp = qpos
+                count = 0
+                for b0, b1 in zip(seq0[rpos:rpos+c[1]],
+                                  seq1[qpos:qpos+c[1]]):
+                    if b0 != b1:
+                        r = vcfpy.Record(CHROM=sname0, POS=rp + bgn0 + 1,
+                                            ID=["."], REF=chr(b0),
+                                            ALT=[vcfpy.Substitution("SNV",
+                                                                    chr(b1))],
+                                            QUAL=50, FILTER=["PASS"],
+                                            INFO={"QPOS": [qp + bgn1 + 2]})
+                        vcf_records.append(r)
+                        count += 1
+                    rp += 1
+                    qp += 1
                 rpos += c[1]
                 qpos += c[1]
             elif c[0] == "I":
-                if qpos_ != 0:
-                    ins_seq = seq1[qpos_-1:qpos_+c[1]].decode("ascii")
+                if qpos != 0:
+                    ins_seq = seq1[qpos-1:qpos+c[1]].decode("ascii")
                 else:
-                    ins_seq = seq1[qpos_:qpos_+c[1]].decode("ascii")
-                if rpos_ == 0:
+                    ins_seq = seq1[qpos:qpos+c[1]].decode("ascii")
+                if rpos == 0:
                     r_base = "."
                 else:
-                    r_base = chr(seq0[rpos_-1])
+                    r_base = chr(seq0[rpos-1])
 
-                r = vcfpy.Record(CHROM=sname0, POS=rpos_ + bgn0 + 1, ID=["."],
+                r = vcfpy.Record(CHROM=sname0, POS=rpos + bgn0, ID=["."],
                                  REF=r_base,
                                  ALT=[vcfpy.Substitution("INS", ins_seq)],
-                                 QUAL=50, FILTER=["PASS"], INFO={})
+                                 QUAL=50, FILTER=["PASS"],
+                                 INFO={"QPOS": [qpos + bgn1 + 2]})
                 vcf_records.append(r)
                 qpos += c[1]
             elif c[0] == "D":
-                if rpos_ != 0:
-                    del_seq = seq0[rpos_-1:rpos_+c[1]].decode("ascii")
+                if rpos != 0:
+                    del_seq = seq0[rpos-1:rpos+c[1]].decode("ascii")
                 else:
-                    del_seq = seq0[rpos_:rpos_+c[1]].decode("ascii")
-                if qpos_ == 0:
+                    del_seq = seq0[rpos:rpos+c[1]].decode("ascii")
+                if qpos == 0:
                     q_base = "."
                 else:
-                    q_base = chr(seq1[qpos_-1])
-                r = vcfpy.Record(CHROM=sname0, POS=rpos_ + bgn0 + 1, ID=["."],
+                    q_base = chr(seq1[qpos-1])
+                r = vcfpy.Record(CHROM=sname0, POS=rpos + bgn0, ID=["."],
                                  REF=del_seq,
                                  ALT=[vcfpy.Substitution("DEL", q_base)],
                                  QUAL=50, FILTER=["PASS"],
-                                 INFO={})
+                                 INFO={"QPOS": [qpos + bgn1 + 2]})
                 vcf_records.append(r)
                 rpos += c[1]
-                rp = rpos_
-                qp = qpos_
-                if c[0] == 'M':
-                    for b0, b1 in zip(seq0[rpos_:rpos_+c[1]],
-                                      seq1[qpos_:qpos_+c[1]]):
-                        if b0 != b1:
-                            r = vcfpy.Record(CHROM=sname0, POS=rp + bgn0 + 1,
-                                             ID=["."], REF=chr(b0),
-                                             ALT=[vcfpy.Substitution("SNV",
-                                                                     chr(b1))],
-                                             QUAL=50, FILTER=["PASS"],
-                                             INFO={})
-                            vcf_records.append(r)
-                        rp += 1
-                        qp += 1
         return vcf_records
 
     def get_vcf_records(self, seq0_info, seq1_info,
@@ -105,6 +106,7 @@ class SeqDBAligner(object):
         if parameters is None:
             parameters = self.default_shimmer_align_parameters
         direction = parameters.get("direction", 0)
+        score = parameters.get("score", (2, -4, 4, 2))
         ctg_direction = direction
         sname0, bgn0, end0 = seq0_info
         sname1, bgn1, end1 = seq1_info
@@ -130,29 +132,27 @@ class SeqDBAligner(object):
                 qpos = y0
                 sub_seq0 = seq0[x0:x1]
                 sub_seq1 = seq1[y0:y1]
-                cigars = get_cigar(sub_seq0, sub_seq1,
-                                   score=(3, -4, 1, 1))
-                v = self._get_vcf_from_cigar(seq0, seq1, sname0, bgn0,
-                                             rpos, qpos, cigars)
-                vcf_records.append((((x0, x1), (y0, y1), 0), v))
+                cigars, aln_score = get_cigar(sub_seq0, sub_seq1,
+                                              score=score)
+                v = self._get_vcf_from_cigar(seq0, seq1, sname0,
+                                                bgn0, bgn1,
+                                                rpos, qpos, cigars)
+                vcf_records.append((((x0, x1), (y0, y1), 0), v, cigars))
 
-            aln_range = ((aln[0][0].pos_end,  aln[-1][0].pos_end),
-                         (aln[0][1].pos_end,  aln[-1][1].pos_end), len(aln))
 
-            cigars = []
             for i in range(len(aln)-1):
-                if i == 0:
-                    rpos = aln[0][0].pos_end
-                    qpos = aln[0][1].pos_end
                 x0, x1 = aln[i][0].pos_end, aln[i+1][0].pos_end
                 y0, y1 = aln[i][1].pos_end, aln[i+1][1].pos_end
+                aln_range = ((x0, x1),
+                             (y0, y1), len(aln))
                 sub_seq0 = seq0[x0:x1]
                 sub_seq1 = seq1[y0:y1]
-                cigars.extend(get_cigar(sub_seq0, sub_seq1,
-                                        score=(3, -4, 1, 1)))
-            v = self._get_vcf_from_cigar(seq0, seq1, sname0, bgn0,
-                                         rpos, qpos, cigars)
-            vcf_records.append((aln_range, v))
+                cigars, aln_score = get_cigar(sub_seq0, sub_seq1,
+                                               score=score)
+                v = self._get_vcf_from_cigar(seq0, seq1, sname0,
+                                                bgn0, bgn1,
+                                                x0, y0, cigars)
+                vcf_records.append((aln_range, v, cigars))
 
         if extend is True:
             x0, x1 = x1, end0 - bgn0
@@ -165,10 +165,11 @@ class SeqDBAligner(object):
             qpos = y0
             sub_seq0 = seq0[x0:x1]
             sub_seq1 = seq1[y0:y1]
-            cigars = get_cigar(sub_seq0, sub_seq1,
-                               score=(3, -4, 1, 1))
-            v = self._get_vcf_from_cigar(seq0, seq1, sname0, bgn0,
-                                         rpos, qpos, cigars)
-            vcf_records.append((((x0, x1), (y0, y1), 0), v))
+            cigars, aln_score = get_cigar(sub_seq0, sub_seq1,
+                               score=score)
+            v = self._get_vcf_from_cigar(seq0, seq1, sname0,
+                                            bgn0, bgn1,
+                                            rpos, qpos, cigars)
+            vcf_records.append((((x0, x1), (y0, y1), 0), v, cigars))
 
         return vcf_records, ctg_direction
