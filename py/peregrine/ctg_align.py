@@ -4,6 +4,32 @@ from .utils import get_cigar
 import vcfpy
 
 
+def get_shimmer_alns_from_seqs(seq0, seq1, parameters={}):
+    reduction_factor = parameters.get("reduction_factor", 12)
+    direction = parameters.get("direction", 0)
+    max_diff = parameters.get("max_diff", 1000)
+    max_dist = parameters.get("max_dist", 15000)
+    max_repeat = parameters.get("max_repeat", 1)
+
+    seq0_shimmers = get_shimmers_from_seq(
+        seq0,
+        rid=0,
+        reduction_factor=reduction_factor)
+
+    seq1_shimmers = get_shimmers_from_seq(
+        seq1,
+        rid=1,
+        reduction_factor=reduction_factor)
+
+    shimmer_alns = get_shimmer_alns(seq0_shimmers,
+                                    seq1_shimmers,
+                                    direction=direction,
+                                    max_diff=max_diff,
+                                    max_dist=max_dist,
+                                    max_repeat=max_repeat)
+    return shimmer_alns
+
+
 class SeqDBAligner(object):
 
     def __init__(self, seqdb0, seqdb1):
@@ -16,32 +42,6 @@ class SeqDBAligner(object):
              "max_dist": 15000,
              "max_repeat": 1}
 
-    def get_shimmer_alns(self, seq0, seq1, parameters=None):
-        if parameters is None:
-            parameters = self.default_shimmer_align_parameters
-        reduction_factor = parameters.get("reduction_factor", 12)
-        direction = parameters.get("direction", 0)
-        max_diff = parameters.get("max_diff", 1000)
-        max_dist = parameters.get("max_dist", 15000)
-        max_repeat = parameters.get("max_repeat", 1)
-
-        seq0_shimmers = get_shimmers_from_seq(
-            seq0,
-            rid=0,
-            reduction_factor=reduction_factor)
-
-        seq1_shimmers = get_shimmers_from_seq(
-            seq1,
-            rid=1,
-            reduction_factor=reduction_factor)
-
-        shimmer_alns = get_shimmer_alns(seq0_shimmers,
-                                        seq1_shimmers,
-                                        direction=direction,
-                                        max_diff=max_diff,
-                                        max_dist=max_dist,
-                                        max_repeat=max_repeat)
-        return shimmer_alns
 
     def _get_vcf_from_cigar(self, seq0, seq1, sname0, bgn0, bgn1,
                             rpos, qpos, cigars):
@@ -120,7 +120,7 @@ class SeqDBAligner(object):
         if direction == 1:
             parameters["direction"] = 0
 
-        shimmer_alns = self.get_shimmer_alns(seq0, seq1, parameters)
+        shimmer_alns = get_shimmer_alns_from_seqs(seq0, seq1, parameters)
 
         vcf_records = []
         for aln, aln_d in shimmer_alns:

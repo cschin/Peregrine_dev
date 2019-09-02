@@ -99,6 +99,33 @@ def get_shimmer_alns(shimmers0, shimmers1, direction=0,
     shimmer4py.free_shmr_alns(aln)
     return aln_chains
 
+
+def get_shimmer_alns_from_seqs(seq0, seq1, parameters={}):
+    reduction_factor = parameters.get("reduction_factor", 12)
+    direction = parameters.get("direction", 0)
+    max_diff = parameters.get("max_diff", 1000)
+    max_dist = parameters.get("max_dist", 15000)
+    max_repeat = parameters.get("max_repeat", 1)
+
+    seq0_shimmers = get_shimmers_from_seq(
+        seq0,
+        rid=0,
+        reduction_factor=reduction_factor)
+
+    seq1_shimmers = get_shimmers_from_seq(
+        seq1,
+        rid=1,
+        reduction_factor=reduction_factor)
+
+    shimmer_alns = get_shimmer_alns(seq0_shimmers,
+                                    seq1_shimmers,
+                                    direction=direction,
+                                    max_diff=max_diff,
+                                    max_dist=max_dist,
+                                    max_repeat=max_repeat)
+    return shimmer_alns
+
+
 def get_tag_from_seqs(read_seq, ref_seq, read_offset, max_dist=150):
     rng = falcon_ffi.new("aln_range[1]")
     read_len = len(read_seq)
@@ -126,8 +153,8 @@ def get_tag_from_seqs(read_seq, ref_seq, read_offset, max_dist=150):
                               ref_seq[read_offset:ref_len],
                               ref_len-read_offset,
                               max_dist, 1)
-        if abs(abs(aln.aln_q_e - aln.aln_q_s)-read_len) < 48 or \
-            abs(ref_len-read_offset - abs(aln.aln_q_e - aln.aln_q_s)) < 48:
+        if abs(abs(aln.aln_q_e - aln.aln_q_s) - read_len) < 48 or \
+                abs(ref_len - read_offset - abs(aln.aln_q_e - aln.aln_q_s)) < 48:
             aligned = True
             rng[0].s1 = aln.aln_q_s
             rng[0].e1 = aln.aln_q_e
@@ -300,7 +327,8 @@ class SequenceDatabase(object):
         s = offset + start
         e = offset + end
         if direction == 1:
-            seq = b"".join([self.basemap[(c & 0xF0)>>4] for c in self.seqdb[s:e]])
+            seq = b"".join([self.basemap[(c & 0xF0) >> 4]
+                            for c in self.seqdb[s:e]])
         else:
             seq = b"".join([self.basemap[c & 0x0F] for c in self.seqdb[s:e]])
         return seq
@@ -317,7 +345,7 @@ class SequenceDatabase(object):
         self._f.close()
 
 
-def get_cigar(seq0, seq1, score=(2,-4, 4, 2)):
+def get_cigar(seq0, seq1, score=(2, -4, 4, 2)):
     r = ksw4py.align(seq0, seq1, score[0], score[1], score[2], score[3])
     cigars = []
     for i in range(r.n_cigar):
