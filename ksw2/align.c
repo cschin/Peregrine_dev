@@ -19,7 +19,7 @@ ksw_extz_t * align(const char *tseq, const char *qseq, int sc_mch, int sc_mis, i
 	qs = (uint8_t*)malloc(ql);
 	for (i = 0; i < tl; ++i) ts[i] = c[(uint8_t)tseq[i]]; // encode to 0/1/2/3
 	for (i = 0; i < ql; ++i) qs[i] = c[(uint8_t)qseq[i]];
-	ksw_extz2_sse(0, ql, qs, tl, ts, 5, mat, gapo, gape, -1, -1, 0, 0, ez);
+	ksw_extd2_sse(0, ql, qs, tl, ts, 5, mat, gapo, gape, 24, 1, -1, 400, 0, 0, ez);
 	// for (i = 0; i < ez->n_cigar; ++i) // print CIGAR
 	// 	printf("%d%c", ez->cigar[i]>>4, "MID"[ez->cigar[i]&0xf]);
 	// putchar('\n');
