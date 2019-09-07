@@ -219,12 +219,12 @@ class SeqDBAligner(object):
                    (end0 < x0 + bgn0_ or x1 + bgn0_ < end0):
                     continue
 
-                cigars = get_cigar(seq0[x0:x1], seq1[y0:y1])
+                cigars, aln_score = get_cigar(seq0[x0:x1], seq1[y0:y1])
 
                 rpos = x0 + bgn0_
                 qpos = y0 + itvl.begin
 
-                for cigar in cigars[0]:
+                for cigar in cigars:
                     if cigar[0] in ('M', 'I'):
                         if rpos < bgn0 and bgn0 < rpos + cigar[1]:
                             pos = qpos + bgn0 - rpos
@@ -243,7 +243,9 @@ class SeqDBAligner(object):
             (ctg_id, ctg_bgn, ctg_end,
                 ctg_direction, mcount0, mcount1) = interval.data
             target_itrees.setdefault(ctg_id, IntervalTree())
-            target_itrees[ctg_id][ctg_bgn-padding:ctg_end+padding] = \
+            b = ctg_bgn - padding
+            e = ctg_bgn + padding
+            target_itrees[ctg_id][b:e] = \
                 (sid, ctg_direction, interval.begin, interval.end)
         for t_id in target_itrees:
             target_itrees[t_id].merge_overlaps(
@@ -251,7 +253,6 @@ class SeqDBAligner(object):
                 data_initializer=[],
                 strict=False)
         return target_itrees
-
 
     def map_small_interval(self, seq0_info, padding=5000):
         """
