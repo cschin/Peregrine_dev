@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <unistd.h>
-#include "kseq.h"
 #include "shimmer.h"
 
 KSEQ_INIT(gzFile, gzread);
@@ -101,13 +100,18 @@ int main(int argc, char *argv[])
 		seq = kseq_init(fp);
 		while ((l = kseq_read(seq)) >= 0) {
 			uint8_t * encoded;
-			encoded = malloc(seq->seq.l);
-			encode_biseq(encoded, seq->seq.s, seq->seq.l);
-			fprintf(index_file, "%09d %s %u %lu\n", rid, seq->name.s, seq->seq.l, offset);
-			fwrite(encoded, sizeof(uint8_t), seq->seq.l, seqdb_file);
+            kstring_t rle_seq;
+            
+            convert_to_RLE(&(seq->seq), &rle_seq);
+
+			encoded = malloc(rle_seq.l);
+			encode_biseq(encoded, rle_seq.s, rle_seq.l);
+			fprintf(index_file, "%09d %s %u %lu\n", rid, seq->name.s, rle_seq.l, offset);
+			fwrite(encoded, sizeof(uint8_t), rle_seq.l, seqdb_file);
 			rid += 1;
-			offset += seq->seq.l;
+			offset += rle_seq.l;
 			free(encoded);
+            free(rle_seq.s);
 		}
 		kseq_destroy(seq);
 		gzclose(fp);

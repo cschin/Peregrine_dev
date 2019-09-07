@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include "khash.h"
 #include "kvec.h"
+#include "kseq.h"
 
 #define ORIGINAL 0
 #define REVERSED 1
@@ -14,6 +15,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+void convert_to_RLE(kstring_t *, kstring_t *);
 
 void encode_biseq(uint8_t *, char *, size_t );
 

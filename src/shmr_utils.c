@@ -7,6 +7,7 @@
 #include "khash.h"
 #include "kvec.h"
 #include "kalloc.h"
+#include "kseq.h"
 
 #ifndef ORIGINAL
 #define ORIGINAL 0
@@ -34,6 +35,24 @@ uint8_t fourbit_map_r[] = {
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+
+void convert_to_RLE(kstring_t * in_seq, kstring_t * out_seq) {
+    char c = 0;
+    size_t j = 0;
+    out_seq->m = in_seq->m;
+    out_seq->l = 0;
+    out_seq->s = calloc(out_seq->m, sizeof(char));
+    for (size_t i = 0; i < in_seq->l; i++) {
+        if (in_seq->s[i] != c) {
+            c = in_seq->s[i];
+            out_seq->s[j] = c;
+            j++;
+        }
+    }
+    realloc(out_seq->s, j);
+    out_seq->l = out_seq->m = j;
+}
+
 
 void encode_biseq(uint8_t * target, char * seq, size_t len) {
 	size_t p, rp;
