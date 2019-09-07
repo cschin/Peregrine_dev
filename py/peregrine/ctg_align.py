@@ -2,6 +2,8 @@ from .utils import get_shimmers_from_seq
 from .utils import get_shimmer_alns
 from .utils import get_cigar
 import vcfpy
+from intervaltree import Interval, IntervalTree
+from collections import Counter
 
 
 def get_shimmer_alns_from_seqs(seq0, seq1, parameters={}):
@@ -41,6 +43,7 @@ class SeqDBAligner(object):
              "max_diff": 1000,
              "max_dist": 15000,
              "max_repeat": 1}
+        self.map_itrees = None
 
 
     def _get_vcf_from_cigar(self, seq0, seq1, sname0, bgn0, bgn1,
@@ -139,10 +142,9 @@ class SeqDBAligner(object):
                 cigars, aln_score = get_cigar(sub_seq0, sub_seq1,
                                               score=score)
                 v = self._get_vcf_from_cigar(seq0, seq1, sname0,
-                                                bgn0, bgn1,
-                                                rpos, qpos, cigars)
+                                             bgn0, bgn1,
+                                             rpos, qpos, cigars)
                 vcf_records.append((((x0, x1), (y0, y1), 0), v, cigars))
-
 
             for i in range(len(aln)-1):
                 x0, x1 = aln[i][0].pos_end, aln[i+1][0].pos_end
@@ -152,10 +154,10 @@ class SeqDBAligner(object):
                 sub_seq0 = seq0[x0:x1]
                 sub_seq1 = seq1[y0:y1]
                 cigars, aln_score = get_cigar(sub_seq0, sub_seq1,
-                                               score=score)
+                                              score=score)
                 v = self._get_vcf_from_cigar(seq0, seq1, sname0,
-                                                bgn0, bgn1,
-                                                x0, y0, cigars)
+                                             bgn0, bgn1,
+                                             x0, y0, cigars)
                 vcf_records.append((aln_range, v, cigars))
 
         if extend is True:
@@ -170,10 +172,115 @@ class SeqDBAligner(object):
             sub_seq0 = seq0[x0:x1]
             sub_seq1 = seq1[y0:y1]
             cigars, aln_score = get_cigar(sub_seq0, sub_seq1,
-                               score=score)
+                                          score=score)
             v = self._get_vcf_from_cigar(seq0, seq1, sname0,
-                                            bgn0, bgn1,
-                                            rpos, qpos, cigars)
+                                         bgn0, bgn1,
+                                         rpos, qpos, cigars)
             vcf_records.append((((x0, x1), (y0, y1), 0), v, cigars))
 
         return vcf_records, ctg_direction
+
+    def load_map_file(self, map_file_path):
+        self.map_itrees = {}
+        with open(map_file_path) as f:
+            for row in f:
+                row = row.strip().split()
+                (ref_id, ref_bgn, ref_end,
+                    ctg_id, ctg_bgn, ctg_end,
+                    ctg_direction, mcount0, mcount1) = [int(_) for _ in row]
+                self.map_itrees.setdefault(ref_id, IntervalTree())
+                self.map_itrees[ref_id][ref_bgn:ref_end] = \
+                    (ctg_id, ctg_bgn, ctg_end,
+                     ctg_direction, mcount0, mcount1)
+
+
+    def map_small_interval(self, seq0_info, padding=5000):
+        """
+        find interval in seq1 that is corresponding to
+        sname0:bgn0-bgn1
+        bgn1 - bgn0 should be less than 250000 for now
+        """
+        assert self.map_itrees is not None
+        sname0, bgn0, end0 = seq0_info
+        assert end0 - bgn0 > 0
+        assert end0 - bgn0 < 250000
+        sid = self.sdb0.name2rid[sname0]
+
+        bgn0_ = bgn0 - padding
+        end0_ = end0 + padding
+        if bgn0_ < 0:
+            bgn0_ = 0
+        if end0_ > self.sdb0.index_data[sid].length:
+            end0_ = self.sdb0.index_data[sid].length
+        seq0 = self.sdb0.get_subseq_by_rid(sid, bgn0_, end0_)
+
+        target_itrees = {}
+        for interval in sorted(self.map_itrees[sid][bgn0_:end0_]):
+            (ctg_id, ctg_bgn, ctg_end,
+                ctg_direction, mcount0, mcount1) = interval.data
+            target_itrees.setdefault(ctg_id, IntervalTree())
+            target_itrees[ctg_id][ctg_bgn-padding:ctg_end+padding] = \
+                (sid, ctg_direction, interval.begin, interval.end)
+
+        candidates = []
+        for t_id in target_itrees:
+            target_itrees[t_id].merge_overlaps(
+                data_reducer=lambda x, y: x+[y[1]],
+                data_initializer=[],
+                strict=False)
+
+            for itvl in sorted(target_itrees[t_id]):
+                direction = Counter(itvl.data).most_common(1)[0][0]
+                seq1 = self.sdb1.get_subseq_by_rid(t_id,
+                                                   itvl.begin, itvl.end,
+                                                   direction=direction)
+                shimmer_alns = get_shimmer_alns_from_seqs(
+                                   seq0, seq1,
+                                   parameters={"reduction_factor": 4})
+
+                candidate = [self.sdb1.index_data[t_id].rname,
+                             direction, None, None]
+                for aln, aln_dist in shimmer_alns:
+
+                    x0 = aln[0].mmer0.pos_end
+                    # y0 = aln[0].mmer1.pos_end
+                    x1 = aln[-1].mmer0.pos_end
+                    # y1 = aln[-1].mmer1.pos_end
+
+                    if (x1-x0) < padding * 2:
+                        continue
+
+                    for i in range(len(aln)-1):
+                        x0 = aln[i].mmer0.pos_end
+                        y0 = aln[i].mmer1.pos_end
+                        x1 = aln[i+1].mmer0.pos_end
+                        y1 = aln[i+1].mmer1.pos_end
+
+                        if (bgn0 < x0 + bgn0_ or x1 + bgn0_ < bgn0) and \
+                           (end0 < x0 + bgn0_ or x1 + bgn0_ < end0):
+                            continue
+
+                        cigars = get_cigar(seq0[x0:x1], seq1[y0:y1])
+
+                        rpos = x0 + bgn0_
+                        qpos = y0 + itvl.begin
+
+                        for cigar in cigars[0]:
+                            if cigar[0] in ('M', 'I'):
+                                if rpos < bgn0 and bgn0 < rpos + cigar[1]:
+                                    pos = qpos + bgn0 - rpos
+                                    if direction == 1:
+                                        pos = self.sdb1.index_data[t_id].length - pos
+                                    candidate[2] = pos
+                                if rpos < end0 and end0 < rpos + cigar[1]:
+                                    pos = qpos + end0 - rpos
+                                    if direction == 1:
+                                        pos = self.sdb1.index_data[t_id].length - pos
+                                    candidate[3] = pos
+                                rpos += cigar[1]
+                            if cigar[0] in ('M', 'D'):
+                                qpos += cigar[1]
+                if candidate[2] is not None and \
+                        candidate[3] is not None:
+                    candidates.append(candidate)
+        return candidates
