@@ -237,6 +237,22 @@ class SeqDBAligner(object):
                         qpos += cigar[1]
         return candidate
 
+    def get_target_itree(self, intervals, sid=0, padding=5000):
+        target_itrees = {}
+        for interval in sorted(intervals):
+            (ctg_id, ctg_bgn, ctg_end,
+                ctg_direction, mcount0, mcount1) = interval.data
+            target_itrees.setdefault(ctg_id, IntervalTree())
+            target_itrees[ctg_id][ctg_bgn-padding:ctg_end+padding] = \
+                (sid, ctg_direction, interval.begin, interval.end)
+        for t_id in target_itrees:
+            target_itrees[t_id].merge_overlaps(
+                data_reducer=lambda x, y: x+[y[1]],
+                data_initializer=[],
+                strict=False)
+        return target_itrees
+
+
     def map_small_interval(self, seq0_info, padding=5000):
         """
         find interval in seq1 that is corresponding to
@@ -257,20 +273,12 @@ class SeqDBAligner(object):
             end0_ = self.sdb0.index_data[sid].length
         seq0 = self.sdb0.get_subseq_by_rid(sid, bgn0_, end0_)
 
-        target_itrees = {}
-        for interval in sorted(self.map_itrees[sid][bgn0_:end0_]):
-            (ctg_id, ctg_bgn, ctg_end,
-                ctg_direction, mcount0, mcount1) = interval.data
-            target_itrees.setdefault(ctg_id, IntervalTree())
-            target_itrees[ctg_id][ctg_bgn-padding:ctg_end+padding] = \
-                (sid, ctg_direction, interval.begin, interval.end)
+        target_itrees = self.get_target_itree(
+                                self.map_itrees[sid][bgn0_:end0_],
+                                sid, padding)
 
         candidates = []
         for t_id in target_itrees:
-            target_itrees[t_id].merge_overlaps(
-                data_reducer=lambda x, y: x+[y[1]],
-                data_initializer=[],
-                strict=False)
             for itvl in sorted(target_itrees[t_id]):
                 direction = Counter(itvl.data).most_common(1)[0][0]
                 seq1 = self.sdb1.get_subseq_by_rid(t_id,
