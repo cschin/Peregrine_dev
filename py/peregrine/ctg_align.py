@@ -45,7 +45,6 @@ class SeqDBAligner(object):
              "max_repeat": 1}
         self.map_itrees = None
 
-
     def _get_vcf_from_cigar(self, seq0, seq1, sname0, bgn0, bgn1,
                             rpos, qpos, cigars):
         vcf_records = []
@@ -58,11 +57,11 @@ class SeqDBAligner(object):
                                   seq1[qpos:qpos+c[1]]):
                     if b0 != b1:
                         r = vcfpy.Record(CHROM=sname0, POS=rp + bgn0 + 1,
-                                            ID=["."], REF=chr(b0),
-                                            ALT=[vcfpy.Substitution("SNV",
-                                                                    chr(b1))],
-                                            QUAL=50, FILTER=["PASS"],
-                                            INFO={"QPOS": [qp + bgn1 + 1]})
+                                         ID=["."], REF=chr(b0),
+                                         ALT=[vcfpy.Substitution("SNV",
+                                                                 chr(b1))],
+                                         QUAL=50, FILTER=["PASS"],
+                                         INFO={"QPOS": [qp + bgn1 + 1]})
                         vcf_records.append(r)
                         count += 1
                     rp += 1
@@ -193,6 +192,50 @@ class SeqDBAligner(object):
                     (ctg_id, ctg_bgn, ctg_end,
                      ctg_direction, mcount0, mcount1)
 
+    def _generate_interval_candidate(self, shimmer_alns,
+                                     seq0, seq1,
+                                     itvl,
+                                     bgn0_, bgn0, end0,
+                                     min_size=500):
+
+        candidate = [None, None]
+        for aln, aln_dist in shimmer_alns:
+
+            x0 = aln[0].mmer0.pos_end
+            # y0 = aln[0].mmer1.pos_end
+            x1 = aln[-1].mmer0.pos_end
+            # y1 = aln[-1].mmer1.pos_end
+
+            if (x1-x0) < min_size:
+                continue
+
+            for i in range(len(aln)-1):
+                x0 = aln[i].mmer0.pos_end
+                y0 = aln[i].mmer1.pos_end
+                x1 = aln[i+1].mmer0.pos_end
+                y1 = aln[i+1].mmer1.pos_end
+
+                if (bgn0 < x0 + bgn0_ or x1 + bgn0_ < bgn0) and \
+                   (end0 < x0 + bgn0_ or x1 + bgn0_ < end0):
+                    continue
+
+                cigars = get_cigar(seq0[x0:x1], seq1[y0:y1])
+
+                rpos = x0 + bgn0_
+                qpos = y0 + itvl.begin
+
+                for cigar in cigars[0]:
+                    if cigar[0] in ('M', 'I'):
+                        if rpos < bgn0 and bgn0 < rpos + cigar[1]:
+                            pos = qpos + bgn0 - rpos
+                            candidate[0] = pos
+                        if rpos < end0 and end0 < rpos + cigar[1]:
+                            pos = qpos + end0 - rpos
+                            candidate[1] = pos
+                        rpos += cigar[1]
+                    if cigar[0] in ('M', 'D'):
+                        qpos += cigar[1]
+        return candidate
 
     def map_small_interval(self, seq0_info, padding=5000):
         """
@@ -228,59 +271,27 @@ class SeqDBAligner(object):
                 data_reducer=lambda x, y: x+[y[1]],
                 data_initializer=[],
                 strict=False)
-
             for itvl in sorted(target_itrees[t_id]):
                 direction = Counter(itvl.data).most_common(1)[0][0]
                 seq1 = self.sdb1.get_subseq_by_rid(t_id,
                                                    itvl.begin, itvl.end,
                                                    direction=direction)
                 shimmer_alns = get_shimmer_alns_from_seqs(
-                                   seq0, seq1,
-                                   parameters={"reduction_factor": 4})
+                                    seq0, seq1,
+                                    parameters={"reduction_factor": 4})
+                pos1, pos2 = self._generate_interval_candidate(
+                                      shimmer_alns,
+                                      seq0, seq1,
+                                      itvl,
+                                      bgn0_, bgn0, end0,
+                                      min_size=2*padding)
+                if pos1 is not None and pos2 is not None:
+                    if direction == 1:
+                        pos1 = self.sdb1.index_data[t_id].length - pos1
+                        pos2 = self.sdb1.index_data[t_id].length - pos2
 
-                candidate = [self.sdb1.index_data[t_id].rname,
-                             direction, None, None]
-                for aln, aln_dist in shimmer_alns:
-
-                    x0 = aln[0].mmer0.pos_end
-                    # y0 = aln[0].mmer1.pos_end
-                    x1 = aln[-1].mmer0.pos_end
-                    # y1 = aln[-1].mmer1.pos_end
-
-                    if (x1-x0) < padding * 2:
-                        continue
-
-                    for i in range(len(aln)-1):
-                        x0 = aln[i].mmer0.pos_end
-                        y0 = aln[i].mmer1.pos_end
-                        x1 = aln[i+1].mmer0.pos_end
-                        y1 = aln[i+1].mmer1.pos_end
-
-                        if (bgn0 < x0 + bgn0_ or x1 + bgn0_ < bgn0) and \
-                           (end0 < x0 + bgn0_ or x1 + bgn0_ < end0):
-                            continue
-
-                        cigars = get_cigar(seq0[x0:x1], seq1[y0:y1])
-
-                        rpos = x0 + bgn0_
-                        qpos = y0 + itvl.begin
-
-                        for cigar in cigars[0]:
-                            if cigar[0] in ('M', 'I'):
-                                if rpos < bgn0 and bgn0 < rpos + cigar[1]:
-                                    pos = qpos + bgn0 - rpos
-                                    if direction == 1:
-                                        pos = self.sdb1.index_data[t_id].length - pos
-                                    candidate[2] = pos
-                                if rpos < end0 and end0 < rpos + cigar[1]:
-                                    pos = qpos + end0 - rpos
-                                    if direction == 1:
-                                        pos = self.sdb1.index_data[t_id].length - pos
-                                    candidate[3] = pos
-                                rpos += cigar[1]
-                            if cigar[0] in ('M', 'D'):
-                                qpos += cigar[1]
-                if candidate[2] is not None and \
-                        candidate[3] is not None:
+                    candidate = [self.sdb1.index_data[t_id].rname,
+                                 direction, pos1, pos2]
                     candidates.append(candidate)
+
         return candidates
