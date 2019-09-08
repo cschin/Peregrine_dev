@@ -45,7 +45,7 @@ class SeqDBAligner(object):
              "max_repeat": 1}
         self.map_itrees = None
 
-    def _get_vcf_from_cigar(self, seq0, seq1, sname0, bgn0, bgn1,
+    def _get_vcf_from_cigar(self, seq0, seq1, sname0, sname1, bgn0, bgn1,
                             rpos, qpos, cigars):
         vcf_records = []
         for c in cigars:
@@ -61,7 +61,10 @@ class SeqDBAligner(object):
                                          ALT=[vcfpy.Substitution("SNV",
                                                                  chr(b1))],
                                          QUAL=50, FILTER=["PASS"],
-                                         INFO={"QPOS": [qp + bgn1 + 1]})
+                                         INFO={"QPOS": qp + bgn1 + 1,
+                                               "QNAME": sname1},
+                                         FORMAT=["GT"],
+                                         calls=[vcfpy.Call("sample0",{"GT":"1|1"})])
                         vcf_records.append(r)
                         count += 1
                     rp += 1
@@ -82,7 +85,10 @@ class SeqDBAligner(object):
                                  REF=r_base,
                                  ALT=[vcfpy.Substitution("INS", ins_seq)],
                                  QUAL=50, FILTER=["PASS"],
-                                 INFO={"QPOS": [qpos + bgn1 + 1]})
+                                 INFO={"QPOS": qpos + bgn1 + 1,
+                                       "QNAME": sname1},
+                                        FORMAT=["GT"],
+                                        calls=[vcfpy.Call("sample0",{"GT":"1|1"})])
                 vcf_records.append(r)
                 qpos += c[1]
             elif c[0] == "D":
@@ -98,13 +104,16 @@ class SeqDBAligner(object):
                                  REF=del_seq,
                                  ALT=[vcfpy.Substitution("DEL", q_base)],
                                  QUAL=50, FILTER=["PASS"],
-                                 INFO={"QPOS": [qpos + bgn1 + 1]})
+                                 INFO={"QPOS": qpos + bgn1 + 1,
+                                       "QNAME": sname1},
+                                       FORMAT=["GT"],
+                                       calls=[vcfpy.Call("sample0",{"GT":"1|1"})])
                 vcf_records.append(r)
                 rpos += c[1]
         return vcf_records
 
     def get_vcf_records(self, seq0_info, seq1_info,
-                        parameters=None, extend=True):
+                        parameters=None, extend=True, ext_size=5000):
         if parameters is None:
             parameters = self.default_shimmer_align_parameters
         direction = parameters.get("direction", 0)
@@ -119,6 +128,11 @@ class SeqDBAligner(object):
             bgn0 = 0
         if bgn1 == -1:
             bgn1 = 0
+        if end0 == -1:
+            end0 = self.sdb0.get_seq_index_by_name(sname0).length
+        if end1 == -1:
+            end1 = self.sdb0.get_seq_index_by_name(sname1).length
+
         if direction == 1:
             parameters["direction"] = 0
 
@@ -129,9 +143,11 @@ class SeqDBAligner(object):
             if len(aln) < 2:
                 continue
             if extend is True and len(vcf_records) == 0:
-                x0, x1 = 0, aln[0][0].pos_end
-                y1 = aln[0][1].pos_end
-                y0 = y1 - x1 - 100
+                ext = min(ext_size, aln[0][0].pos_end,  aln[0][1].pos_end)
+                x0, x1 = aln[0][0].pos_end - ext, aln[0][0].pos_end
+                if x0 < 0:
+                    x0 = 0
+                y0, y1 = aln[0][1].pos_end - ext, aln[0][1].pos_end
                 if y0 < 0:
                     y0 = 0
                 rpos = x0
@@ -140,7 +156,7 @@ class SeqDBAligner(object):
                 sub_seq1 = seq1[y0:y1]
                 cigars, aln_score = get_cigar(sub_seq0, sub_seq1,
                                               score=score)
-                v = self._get_vcf_from_cigar(seq0, seq1, sname0,
+                v = self._get_vcf_from_cigar(seq0, seq1, sname0, sname1,
                                              bgn0, bgn1,
                                              rpos, qpos, cigars)
                 vcf_records.append((((x0, x1), (y0, y1), 0), v, cigars))
@@ -154,15 +170,15 @@ class SeqDBAligner(object):
                 sub_seq1 = seq1[y0:y1]
                 cigars, aln_score = get_cigar(sub_seq0, sub_seq1,
                                               score=score)
-                v = self._get_vcf_from_cigar(seq0, seq1, sname0,
+                v = self._get_vcf_from_cigar(seq0, seq1, sname0, sname1,
                                              bgn0, bgn1,
                                              x0, y0, cigars)
                 vcf_records.append((aln_range, v, cigars))
 
-        if extend is True:
-            x0, x1 = x1, end0 - bgn0
-            y0 = y1
-            y1 = y0 + x1 - x0 + 100
+        if len(vcf_records) > 0 and extend is True:
+            ext = min(ext_size, end0-x1, end1-y1)
+            x0, x1 = x1, x1 + ext
+            y0, y1 = y1, y0 + y1 + ext
             slen = self.sdb1.get_seq_index_by_name(sname1).length
             if y1 > slen:
                 y1 = slen
@@ -172,7 +188,7 @@ class SeqDBAligner(object):
             sub_seq1 = seq1[y0:y1]
             cigars, aln_score = get_cigar(sub_seq0, sub_seq1,
                                           score=score)
-            v = self._get_vcf_from_cigar(seq0, seq1, sname0,
+            v = self._get_vcf_from_cigar(seq0, seq1, sname0, sname1,
                                          bgn0, bgn1,
                                          rpos, qpos, cigars)
             vcf_records.append((((x0, x1), (y0, y1), 0), v, cigars))

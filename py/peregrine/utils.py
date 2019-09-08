@@ -294,7 +294,7 @@ SeqIndexData = namedtuple("SeqIndexData", "rname length offset")
 
 class SequenceDatabase(object):
     def __init__(self, index_path="", seqdb_path=""):
-        self.basemap = {1: b"A", 2: b"C", 4: b"G", 8: b"T"}
+        self.basemap = {0: b"N", 1: b"A", 2: b"C", 4: b"G", 8: b"T"}
         self.index_path = index_path
         self.seqdb_path = seqdb_path
         self.name2rid = {}
