@@ -1,4 +1,5 @@
-import sys, os
+import sys
+import os
 import numpy as np
 import mmap
 from collections import namedtuple
@@ -154,7 +155,9 @@ def get_tag_from_seqs(read_seq, ref_seq, read_offset, max_dist=150):
                               ref_len-read_offset,
                               max_dist, 1)
         if abs(abs(aln.aln_q_e - aln.aln_q_s) - read_len) < 48 or \
-                abs(ref_len - read_offset - abs(aln.aln_q_e - aln.aln_q_s)) < 48:
+                abs(ref_len -
+                    read_offset -
+                    abs(aln.aln_q_e - aln.aln_q_s)) < 48:
             aligned = True
             rng[0].s1 = aln.aln_q_s
             rng[0].e1 = aln.aln_q_e
