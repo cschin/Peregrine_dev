@@ -64,7 +64,8 @@ class SeqDBAligner(object):
                                          INFO={"QPOS": qp + bgn1 + 1,
                                                "QNAME": sname1},
                                          FORMAT=["GT"],
-                                         calls=[vcfpy.Call("sample0",{"GT":"1|1"})])
+                                         calls=[vcfpy.Call("sample0",
+                                                           {"GT": "1|1"})])
                         vcf_records.append(r)
                         count += 1
                     rp += 1
@@ -87,8 +88,8 @@ class SeqDBAligner(object):
                                  QUAL=50, FILTER=["PASS"],
                                  INFO={"QPOS": qpos + bgn1 + 1,
                                        "QNAME": sname1},
-                                        FORMAT=["GT"],
-                                        calls=[vcfpy.Call("sample0",{"GT":"1|1"})])
+                                 FORMAT=["GT"],
+                                 calls=[vcfpy.Call("sample0", {"GT": "1|1"})])
                 vcf_records.append(r)
                 qpos += c[1]
             elif c[0] == "D":
@@ -106,8 +107,8 @@ class SeqDBAligner(object):
                                  QUAL=50, FILTER=["PASS"],
                                  INFO={"QPOS": qpos + bgn1 + 1,
                                        "QNAME": sname1},
-                                       FORMAT=["GT"],
-                                       calls=[vcfpy.Call("sample0",{"GT":"1|1"})])
+                                 FORMAT=["GT"],
+                                 calls=[vcfpy.Call("sample0", {"GT": "1|1"})])
                 vcf_records.append(r)
                 rpos += c[1]
         return vcf_records

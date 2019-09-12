@@ -198,14 +198,12 @@ class JITAssembler(object):
         for subG in weakly_connected_component_subgraphs(self.DAG):
             while len(subG.edges) != 0:
                 path = dag_longest_path(subG)
-
                 v = path[0]
                 seqs = []
                 added_edges = []
                 for w in path[1:]:
                     edge_count += 1
                     if (v, w) in used_edges:
-
                         added_edges.append((v, w))
                         if len(seqs) > 1:
                             ctgs.append(b"".join(seqs))
