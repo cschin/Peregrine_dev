@@ -43,7 +43,9 @@ class JITAssembler(object):
                                               w=self.w)
             self.read2shimmers[rid] = shimmers0
             mmpairs0 = []
+            mmpairs0_pos = {}
             mmpairs1 = []
+            mmpairs1_pos = {}
             for i in range(shimmers0.mmers.n-1):
                 mmer0 = mmer2tuple(shimmers0.mmers.a[i])
                 mmer1 = mmer2tuple(shimmers0.mmers.a[i+1])
@@ -52,19 +54,38 @@ class JITAssembler(object):
                 if mmer0.mmer == mmer1.mmer:
                     continue
                 key = (mmer0.mmer, mmer1.mmer)
+                pos = (mmer0.pos_end, mmer1.pos_end)
                 mmpairs0.append(key)
-                self.smp2reads.setdefault(key, [])
-                self.smp2reads[key].append((rid, 1))
+                mmpairs0_pos.setdefault(key, [])
+                mmpairs0_pos[key].append(pos)
 
                 key = (mmer1.mmer, mmer0.mmer)
+                pos = (mmer1.pos_end - self.k, mmer0.pos_end - self.k)
                 mmpairs1.append(key)
-                self.smp2reads.setdefault(key, [])
-                self.smp2reads[key].append(rid*10+1)
+                mmpairs1_pos.setdefault(key, [])
+                mmpairs1_pos[key].append(pos)
 
-            self.read2smps[(rid, 0)] = ["{}:{}".format(*x)
-                                        for x in mmpairs0]
-            self.read2smps[(rid, 1)] = ["{}:{}".format(*x)
-                                        for x in mmpairs1[::-1]]
+            self.read2smps[(rid, 0)] = []
+            self.read2smps[(rid, 1)] = []
+
+            for key in mmpairs0:
+                pos = mmpairs0_pos[key]
+                if len(pos) > 1:  # duplicated SMP in a reads
+                    continue
+                pos = pos[0]
+                self.smp2reads.setdefault(key, [])
+                self.smp2reads[key].append((rid, 0, pos))
+                self.read2smps[(rid, 0)].append(key)
+
+            for key in mmpairs1[::-1]:
+                pos = mmpairs1_pos[key]
+                if len(pos) > 1:  # duplicated SMP in a reads
+                    continue
+                pos = pos[0]
+                self.smp2reads.setdefault(key, [])
+                self.smp2reads[key].append((rid, 1, pos))
+                self.read2smps[(rid, 1)].append(key)
+
         self.smp_count = Counter()
         for v in self.read2smps.values():
             self.smp_count.update(v)
@@ -154,3 +175,80 @@ class JITAssembler(object):
 
         self.full_graph = G.copy()
         self.DAG = transitive_reduction(G_)
+
+    def _get_ctgs_from_DAG(self):
+        def reverse_smp(smp):
+            rsmp = tuple(list(smp)[::-1])
+            return rsmp
+
+        span_read_count = Counter()
+
+        for subG in weakly_connected_component_subgraphs(self.DAG):
+            path = dag_longest_path(subG)
+            v = path[0]
+            for w in path[1:]:
+                v_reads = set([(x[0], x[1]) for x in self.smp2reads[v]])
+                w_reads = set([(x[0], x[1]) for x in self.smp2reads[w]])
+                span_read_count.update(v_reads & w_reads)
+                v = w
+
+        used_edges = set()
+        ctgs = []
+        edge_count = 0
+        for subG in weakly_connected_component_subgraphs(self.DAG):
+            while len(subG.edges) != 0:
+                path = dag_longest_path(subG)
+
+                v = path[0]
+                seqs = []
+                added_edges = []
+                for w in path[1:]:
+                    edge_count += 1
+                    if (v, w) in used_edges:
+
+                        added_edges.append((v, w))
+                        if len(seqs) > 1:
+                            ctgs.append(b"".join(seqs))
+                        seqs = []
+                        continue
+
+                    v_reads = set([x[0:2] for x in self.smp2reads[v]])
+                    w_reads = set([x[0:2] for x in self.smp2reads[w]])
+
+                    count_reads = []
+                    for n in list(v_reads & w_reads):
+                        count_reads.append((span_read_count[n], n))
+                    count_reads.sort()
+
+                    if len(count_reads) == 0:
+                        if len(seqs) > 1:
+                            ctgs.append(b"".join(seqs))
+                        seqs = []
+                        continue
+
+                    m0 = [x for x in self.smp2reads[v]
+                          if x[0:2] == count_reads[-1][1]][0]
+                    m1 = [x for x in self.smp2reads[w]
+                          if x[0:2] == count_reads[-1][1]][0]
+                    read_id = m0[0]
+                    direction = m0[1]
+                    pos0 = m0[2][0]
+                    pos1 = m1[2][0]
+                    if direction == 1:
+                        seq = rc(self.reads[read_id][pos1:pos0])
+                    else:
+                        seq = self.reads[read_id][pos0:pos1]
+                    seqs.append(seq)
+
+                    used_edges.add((v, w))
+                    used_edges.add((reverse_smp(w), reverse_smp(v)))
+                    added_edges.append((v, w))
+                    v = w
+
+                if len(seqs) > 0:
+                    ctgs.append(b"".join(seqs))
+
+                for v, w in added_edges:
+                    if subG.has_edge(v, w):
+                        subG.remove_edge(v, w)
+        return ctgs
