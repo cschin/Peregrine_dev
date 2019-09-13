@@ -352,10 +352,10 @@ class SeqDBAligner(object):
                                                 max_diff=1000,
                                                 max_dist=15000,
                                                 max_repeat=1)
-                align_err = []
                 for aln, aln_d in shimmer_alns:
                     if len(aln) < 5:
                         continue
+                    align_err = []
                     for i in range(len(aln)-1):
                         mmer0 = aln[i][0]
                         mmer1 = aln[i][1]
@@ -373,6 +373,8 @@ class SeqDBAligner(object):
                                 100.0 * seq_aln.dist / seq_aln.aln_str_size
                         align_err.append(
                             ((start+x0, start+x1), (b+y0, b+y1), estimate_err))
-                    align_segs[(k, aln[0][0][3], aln[0][1][3],
-                               aln[-1][0][3], aln[-1][1][3])] = align_err
+                    align_segs[(k,
+                                (aln[0][0][3], aln[-1][0][3]),
+                                (aln[0][1][3], aln[-1][0][3]),
+                                aln[-1][1][3])] = align_err
         return align_segs
