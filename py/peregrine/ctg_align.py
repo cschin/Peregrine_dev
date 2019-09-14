@@ -8,6 +8,35 @@ from intervaltree import Interval, IntervalTree
 from collections import Counter
 
 
+def get_shimmer_dots(seq0, seq1, levels=2, reduction_factor=6, k=16, w=80):
+
+    shmrs0 = get_shimmers_from_seq(seq0,
+                                   levels=levels,
+                                   reduction_factor=reduction_factor,
+                                   k=k, w=w)
+    shmrs1 = get_shimmers_from_seq(seq1,
+                                   levels=levels,
+                                   reduction_factor=reduction_factor,
+                                   k=k, w=w)
+    x = []
+    y = []
+    base_mmer_x = {}
+    for i in range(len(shmrs0)):
+        m = shmrs0[i]
+        m, pos = m[0], m[3]
+        base_mmer_x.setdefault(m, [])
+        base_mmer_x[m].append(pos)
+
+    for i in range(len(shmrs1)):
+        m = shmrs1[i]
+        m, pos = m[0], m[3]
+        if m in base_mmer_x:
+            for p in base_mmer_x[m]:
+                x.append(p)
+                y.append(pos)
+    return x, y
+
+
 def get_shimmer_alns_from_seqs(seq0, seq1, parameters={}):
     reduction_factor = parameters.get("reduction_factor", 12)
     direction = parameters.get("direction", 0)
@@ -357,11 +386,9 @@ class SeqDBAligner(object):
                         continue
                     align_err = []
                     for i in range(len(aln)-1):
-                        mmer0 = aln[i][0]
-                        mmer1 = aln[i][1]
+                        mmer0, mmer1 = aln[i][0:2]
                         x0, y0 = mmer0[3], mmer1[3]
-                        mmer0 = aln[i+1][0]
-                        mmer1 = aln[i+1][1]
+                        mmer0, mmer1 = aln[i+1][0:2]
                         x1, y1 = mmer0[3], mmer1[3]
                         seq0 = ref_seq[x0:x1]
                         seq1 = ctg_seq[y0:y1]
@@ -373,8 +400,26 @@ class SeqDBAligner(object):
                                 100.0 * seq_aln.dist / seq_aln.aln_str_size
                         align_err.append(
                             ((start+x0, start+x1), (b+y0, b+y1), estimate_err))
-                    align_segs[(k,
-                                (aln[0][0][3], aln[-1][0][3]),
-                                (aln[0][1][3], aln[-1][0][3]),
-                                aln[-1][1][3])] = align_err
+                    align_segs[((rid, aln[0][0][3], aln[-1][0][3]),
+                                (k, aln[0][1][3], aln[-1][1][3]),
+                                direction)] = align_err
         return align_segs
+
+    def write_align_segments_to_bed(self, aln_segs, file_path):
+        with open(file_path, "w") as f:
+            for k, vv in list(aln_segs.items()):
+                ref_id, ref_s, ref_e = k[0]
+                seq_id, seq_s, seq_e = k[1]
+                direction = k[2]
+                for v in vv:
+                    ref_seg_s, reg_seg_e = v[0]
+                    seq_seg_s, seq_seg_e = v[1]
+                    diff = v[2]
+                    bed_line = []
+                    ref_name = self.sdb0.index_data[ref_id].rname
+                    seq_name = self.sdb1.index_data[seq_id].rname
+                    bed_line = [f"{ref_name}", f"{ref_seg_s}", f"{reg_seg_e}"]
+                    bed_line.append(
+                        f"{seq_name}:{seq_seg_s}-{seq_seg_e}:" +
+                        f"{direction}:{diff:0.2f}")
+                    print("\t".join(bed_line), file=f)
