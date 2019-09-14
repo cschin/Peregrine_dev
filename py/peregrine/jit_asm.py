@@ -8,6 +8,8 @@ from .utils import mmer2tuple
 import networkx as nx
 from collections import Counter
 from networkx.algorithms.dag import transitive_reduction
+from networkx.algorithms.dag import dag_longest_path
+from networkx import weakly_connected_component_subgraphs
 
 
 class JITAssembler(object):
@@ -29,7 +31,7 @@ class JITAssembler(object):
         self.DAG = None
         self.anchor2read = None
 
-    def _get_read_shimmer_maps(self):
+    def _get_read_shimmer_maps(self, min_dist=250):
         """
         Loop through the reads, create the shimmer for each reads
         and build the map between the shimmers to reads and the
@@ -49,7 +51,7 @@ class JITAssembler(object):
             for i in range(shimmers0.mmers.n-1):
                 mmer0 = mmer2tuple(shimmers0.mmers.a[i])
                 mmer1 = mmer2tuple(shimmers0.mmers.a[i+1])
-                if abs(mmer0.pos_end - mmer1.pos_end) < 250:
+                if abs(mmer0.pos_end - mmer1.pos_end) < min_dist:
                     continue
                 if mmer0.mmer == mmer1.mmer:
                     continue
@@ -160,8 +162,8 @@ class JITAssembler(object):
                     G.add_edge(*edge, count=1, in_cycle=0)
 
         self.circles = []
-        for v in G.nodes():
-            G.nodes[edge[0]]["in_cycle"] = 0
+        for e in G.edges():
+            G.edges[e]["in_cycle"] = 0
         G_ = G.copy()
         while 1:
             try:
