@@ -107,16 +107,20 @@ def get_shimmer_alns_from_seqs(seq0, seq1, parameters={}):
     max_diff = parameters.get("max_diff", 1000)
     max_dist = parameters.get("max_dist", 15000)
     max_repeat = parameters.get("max_repeat", 1)
+    w = parameters.get("w", 80)
+    k = parameters.get("k", 16)
 
     seq0_shimmers = get_shimmers_from_seq(
         seq0,
         rid=0,
-        reduction_factor=reduction_factor)
+        reduction_factor=reduction_factor,
+        k=k, w=w)
 
     seq1_shimmers = get_shimmers_from_seq(
         seq1,
         rid=1,
-        reduction_factor=reduction_factor)
+        reduction_factor=reduction_factor,
+        k=k, w=w)
 
     shimmer_alns = get_shimmer_alns(seq0_shimmers,
                                     seq1_shimmers,
