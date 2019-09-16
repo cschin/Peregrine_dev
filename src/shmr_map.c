@@ -68,7 +68,7 @@ void process_map(
 	if (fstat(rfd, &rsb) == -1)           /* To obtain file size */
 		handle_error("fstat");
 
-	rseq_p = (uint8_t *)  mmap((caddr_t)0, rsb.st_size, PROT_READ, MAP_SHARED, rfd, 0);
+	rseq_p = (uint8_t *)  mmap((void *)0, rsb.st_size, PROT_READ, MAP_SHARED, rfd, 0);
 
 	sfd = open(seqdb_file_path, O_RDONLY);
 	if (sfd == -1)
@@ -77,7 +77,7 @@ void process_map(
 	if (fstat(sfd, &ssb) == -1)           /* To obtain file size */
 		handle_error("fstat");
 
-	seq_p = (uint8_t *)  mmap((caddr_t)0, ssb.st_size, PROT_READ, MAP_SHARED, sfd, 0);
+	seq_p = (uint8_t *)  mmap((void *)0, ssb.st_size, PROT_READ, MAP_SHARED, sfd, 0);
 
 	//clock_t begin = clock();
 	//clock_t end;
