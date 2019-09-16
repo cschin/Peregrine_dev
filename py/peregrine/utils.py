@@ -45,6 +45,7 @@ class Shimmer(object):
         return mmer2tuple(self.mmers.a[i])
 
     def __del__(self):
+        shimmer4py.free(self.mmers.a)
         shimmer_ffi.release(self.mmers)
 
 
