@@ -12,9 +12,9 @@ void decode_biseq(uint8_t * src, char * seq,
 typedef int32_t seq_coor_t;
 
 typedef struct {
-	seq_coor_t m_size, dist ;
-	seq_coor_t q_bgn, q_end;
-	seq_coor_t t_bgn, t_end;
+    seq_coor_t m_size, dist ;
+    seq_coor_t q_bgn, q_end;
+    seq_coor_t t_bgn, t_end;
     seq_coor_t t_m_end, q_m_end;
 } ovlp_match_t;
 
@@ -84,16 +84,16 @@ void mm_reduce(mm128_v *, mm128_v *, uint8_t);
 """)
 
 ffibuilder.set_source("peregrine._shimmer4py",
-               f"""
-               #include "{basedir}/src/shimmer.h"
-               """,
-               sources=[f'{basedir}/src/shimmer4py.c',
-                        f'{basedir}/src/DWmatch.c',
-                        f'{basedir}/src/shmr_align.c',
-                        f'{basedir}/src/shmr_utils.c',
-                        f'{basedir}/src/shmr_reduce.c',
-                        f'{basedir}/src/mm_sketch.c',
-                        f'{basedir}/src/kalloc.c'])   # library name, for the linker
+                      f"""
+                      #include "{basedir}/src/shimmer.h"
+                      """,
+                      sources=[f'{basedir}/src/shimmer4py.c',
+                               f'{basedir}/src/DWmatch.c',
+                               f'{basedir}/src/shmr_align.c',
+                               f'{basedir}/src/shmr_utils.c',
+                               f'{basedir}/src/shmr_reduce.c',
+                               f'{basedir}/src/mm_sketch.c',
+                               f'{basedir}/src/kalloc.c'])   # library name, for the linker
 
 if __name__ == "__main__":
     ffibuilder.compile(verbose=True)
