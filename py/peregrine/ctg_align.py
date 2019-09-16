@@ -1,6 +1,7 @@
 from .utils import get_shimmers_from_seq
 from .utils import get_shimmer_alns
 from .utils import get_cigar
+from .utils import get_shimmer_alns_from_seqs
 from ._falcon4py import lib as falcon
 from ._falcon4py import ffi
 import vcfpy
@@ -35,32 +36,6 @@ def get_shimmer_dots(seq0, seq1, levels=2, reduction_factor=6, k=16, w=80):
                 x.append(p)
                 y.append(pos)
     return x, y
-
-
-def get_shimmer_alns_from_seqs(seq0, seq1, parameters={}):
-    reduction_factor = parameters.get("reduction_factor", 12)
-    direction = parameters.get("direction", 0)
-    max_diff = parameters.get("max_diff", 1000)
-    max_dist = parameters.get("max_dist", 15000)
-    max_repeat = parameters.get("max_repeat", 1)
-
-    seq0_shimmers = get_shimmers_from_seq(
-        seq0,
-        rid=0,
-        reduction_factor=reduction_factor)
-
-    seq1_shimmers = get_shimmers_from_seq(
-        seq1,
-        rid=1,
-        reduction_factor=reduction_factor)
-
-    shimmer_alns = get_shimmer_alns(seq0_shimmers,
-                                    seq1_shimmers,
-                                    direction=direction,
-                                    max_diff=max_diff,
-                                    max_dist=max_dist,
-                                    max_repeat=max_repeat)
-    return shimmer_alns
 
 
 class SeqDBAligner(object):
