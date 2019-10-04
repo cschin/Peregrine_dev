@@ -398,3 +398,54 @@ class SeqDBAligner(object):
                         f"{seq_name}:{seq_seg_s}-{seq_seg_e}:" +
                         f"{direction}:{diff:0.2f}")
                     print("\t".join(bed_line), file=f)
+
+    def write_align_segments_to_chain_file(self, aln_segs, file_path):
+        ref_cache = {}
+        seq_cache = {}
+        f = open(file_path, "w")
+        id_ = 0
+        for k, vv in list(aln_segs.items()):
+            ref_id, ref_s, ref_e = k[0]
+            ref_size = self.sdb0.index_data[ref_id].length
+            seq_id, seq_s, seq_e = k[1]
+            seq_size = self.sdb1.index_data[seq_id].length
+            direction = "+" if k[2] == 0 else "-"
+            ref_name = self.sdb0.index_data[ref_id].rname
+            seq_name = self.sdb1.index_data[seq_id].rname
+            if ref_id not in ref_cache:
+                ref_cache[ref_id] = self.sdb0.get_subseq_by_rid(ref_id)
+            if seq_id not in seq_cache:
+                seq_cache[seq_id] = self.sdb1.get_subseq_by_rid(seq_id)
+            seq0 = ref_cache[ref_id]
+            seq1 = seq_cache[seq_id]
+            for v in vv:
+                ref_seg_s, reg_seg_e = v[0]
+                seq_seg_s, seq_seg_e = v[1]
+                diff = v[2]
+                cigars, aln_score = get_cigar(seq0[ref_seg_s:reg_seg_e],
+                                              seq1[seq_seg_s:seq_seg_e])
+                if aln_score < 0:
+                    continue
+
+                chain_line = f"chain {aln_score} {ref_name} "\
+                    f"{ref_size} + {ref_seg_s} {reg_seg_e}"\
+                    f" {seq_name} {seq_size} "\
+                    f"{direction} {seq_seg_s} {seq_seg_e} {id_}"
+                id_ += 1
+
+                print(chain_line, file=f)
+                x0 = 0
+                for cigar in cigars:
+                    if cigar[0] == 'M':
+                        x0 = cigar[1]
+                    elif cigar[0] == "D":
+                        x1 = cigar[1]
+                        x2 = 0
+                        print(f"{x0} {x1} {x2}", file=f)
+                    elif cigar[0] == "I":
+                        x1 = 0
+                        x2 = cigar[1]
+                        print(f"{x0} {x1} {x2}", file=f)
+                print(f"{x0}", file=f)
+                print(file=f)
+        f.close()
