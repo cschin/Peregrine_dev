@@ -77,13 +77,13 @@ void free(void *ptr);
 """)
 
 ffibuilder.set_source("peregrine._falcon4py",
-               f"""
-               #include "{basedir}/falcon/common.h"
-               #include "{basedir}/falcon/falcon.h"
-               """, sources = [f'{basedir}/falcon/falcon.c',
+                      f"""
+                      #include "{basedir}/falcon/common.h"
+                      #include "{basedir}/falcon/falcon.h"
+                      """,
+                      sources=[f'{basedir}/falcon/falcon.c',
                                f'{basedir}/falcon/DW_banded.c',
-                               f'{basedir}/falcon/kalloc.c'])   # library name, for the linker
+                               f'{basedir}/falcon/kalloc.c'])  # library name, for the linker
 
 if __name__ == "__main__":
-    import sys
     ffibuilder.compile(verbose=True)
