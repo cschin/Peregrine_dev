@@ -281,7 +281,8 @@ class SeqDBAligner(object):
         return self.get_target_itree(self.map_itrees[sid][s:e],
                                      sid=sid, padding=padding)
 
-    def map_small_interval(self, seq0_info, padding=5000):
+    def map_small_interval(self, seq0_info, padding=5000,
+                           max_interval_size=250000):
         """
         find interval in seq1 that is corresponding to
         sname0:bgn0-bgn1
@@ -290,7 +291,7 @@ class SeqDBAligner(object):
         assert self.map_itrees is not None
         sname0, bgn0, end0 = seq0_info
         assert end0 - bgn0 > 0
-        assert end0 - bgn0 < 250000
+        assert end0 - bgn0 < max_interval_size
         sid = self.sdb0.name2rid[sname0]
 
         bgn0_ = bgn0 - padding
