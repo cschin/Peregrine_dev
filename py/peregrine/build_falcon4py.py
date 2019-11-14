@@ -83,7 +83,7 @@ ffibuilder.set_source("peregrine._falcon4py",
                       """,
                       sources=[f'{basedir}/falcon/falcon.c',
                                f'{basedir}/falcon/DW_banded.c',
-                               f'{basedir}/falcon/kalloc.c'])  # library name, for the linker
+                               f'{basedir}/falcon/kalloc.c'])
 
 if __name__ == "__main__":
     ffibuilder.compile(verbose=True)
