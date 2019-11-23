@@ -1,5 +1,5 @@
-import sys
-import os
+# import sys
+# import os
 import numpy as np
 import mmap
 from collections import namedtuple
@@ -8,7 +8,7 @@ from ._shimmer4py import lib as shimmer4py
 from ._falcon4py import ffi as falcon_ffi
 from ._falcon4py import lib as falcon4py
 from collections import Counter
-from ._ksw4py import ffi as ksw4py_ffi
+# from ._ksw4py import ffi as ksw4py_ffi
 from ._ksw4py import lib as ksw4py
 
 
@@ -76,8 +76,10 @@ def get_shimmers_from_seq(seq, rid=0,
 ALIGNED_MMER = namedtuple("ALIGNED_MMER", "mmer0 mmer1")
 
 
-def get_shimmer_alns(shimmers0, shimmers1, direction=0,
-                     max_diff=100, max_dist=1200,
+def get_shimmer_alns(shimmers0, shimmers1,
+                     direction=0,
+                     max_diff=100,
+                     max_dist=1200,
                      max_repeat=1):
     _shimmers0 = shimmers0.mmers
     _shimmers1 = shimmers1.mmers
@@ -103,7 +105,7 @@ def get_shimmer_alns(shimmers0, shimmers1, direction=0,
 
 
 def get_shimmer_alns_from_seqs(seq0, seq1, parameters={}):
-    reduction_factor = parameters.get("reduction_factor", 12)
+    reduction_factor = parameters.get("reduction_factor", 3)
     direction = parameters.get("direction", 0)
     max_diff = parameters.get("max_diff", 1000)
     max_dist = parameters.get("max_dist", 15000)
@@ -132,17 +134,54 @@ def get_shimmer_alns_from_seqs(seq0, seq1, parameters={}):
     return shimmer_alns
 
 
-def get_tag_from_seqs(read_seq, ref_seq, read_offset, max_dist=150):
+def get_shimmer_match_offset(shimmer0, shimmer1,
+                             direction=0,
+                             max_diff=100,
+                             max_dist=1200,
+                             max_repeat=1):
+    alns = get_shimmer_alns(shimmer0, shimmer1,
+                            direction=direction,
+                            max_diff=max_diff,
+                            max_dist=max_dist,
+                            max_repeat=max_repeat)
+    if len(alns) == 0:
+        return (None, [[]])
+    alns.sort(key=lambda x: -len(x[0]))
+    aln = alns[0]
+    read_offset = aln[0][0][0][3] - aln[0][0][1][3]
+    return read_offset, alns
+
+
+def get_shimmer_match_offset_from_seq(ref_seq, read_seq,
+                                      parameters={}):
+    alns = get_shimmer_alns_from_seqs(ref_seq, read_seq,
+                                      parameters=parameters)
+    if len(alns) == 0:
+        return (None, [[]])
+    alns.sort(key=lambda x: -len(x[0]))
+    aln = alns[0]
+    read_offset = aln[0][0][0][3] - aln[0][0][1][3]
+    return read_offset, alns
+
+
+def get_align_range(read_seq, ref_seq,
+                    read_offset, max_dist=150,
+                    aln_str=False):
     rng = falcon_ffi.new("aln_range[1]")
     read_len = len(read_seq)
     ref_len = len(ref_seq)
     aligned = False
+    t_offset = 0
+    if aln_str:
+        aln_str = 1
+    else:
+        aln_str = 0
     if read_offset < 0:
         aln = falcon4py.align(read_seq[abs(read_offset):read_len],
                               read_len - abs(read_offset),
                               ref_seq,
                               len(ref_seq),
-                              max_dist, 1)
+                              max_dist, aln_str)
         if abs(abs(aln.aln_q_e-aln.aln_q_s) -
                 (read_len - abs(read_offset))) < 48:
             aligned = True
@@ -151,14 +190,12 @@ def get_tag_from_seqs(read_seq, ref_seq, read_offset, max_dist=150):
             rng[0].s2 = aln.aln_t_s
             rng[0].e2 = aln.aln_t_e
             t_offset = 0
-        else:
-            falcon4py.free_alignment(aln)
     else:
         aln = falcon4py.align(read_seq,
                               read_len,
                               ref_seq[read_offset:ref_len],
                               ref_len-read_offset,
-                              max_dist, 1)
+                              max_dist, aln_str)
         if abs(abs(aln.aln_q_e - aln.aln_q_s) - read_len) < 48 or \
                 abs(ref_len -
                     read_offset -
@@ -169,8 +206,19 @@ def get_tag_from_seqs(read_seq, ref_seq, read_offset, max_dist=150):
             rng[0].s2 = aln.aln_t_s
             rng[0].e2 = aln.aln_t_e
             t_offset = read_offset
-        else:
-            falcon4py.free_alignment(aln)
+    if not aligned:
+        falcon_ffi.release(rng)
+        falcon4py.free_alignment(aln)
+        rng = None
+        aln = None
+    return aligned, aln, rng, t_offset
+
+
+def get_tag_from_seqs(read_seq, ref_seq, read_offset, max_dist=150):
+    aligned, aln, rng, t_offset = get_align_range(read_seq, ref_seq,
+                                                  read_offset,
+                                                  max_dist=max_dist,
+                                                  aln_str=True)
     tag = None
     if aligned:
         tag = falcon4py.get_align_tags(aln.q_aln_str,
@@ -178,8 +226,7 @@ def get_tag_from_seqs(read_seq, ref_seq, read_offset, max_dist=150):
                                        aln.aln_str_size,
                                        rng, 0, t_offset)
         falcon4py.free_alignment(aln)
-    falcon_ffi.release(rng)
-
+        falcon_ffi.release(rng)
     return tag
 
 
