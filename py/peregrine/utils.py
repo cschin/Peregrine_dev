@@ -152,7 +152,7 @@ def get_shimmer_match_offset(shimmer0, shimmer1,
     return read_offset, alns
 
 
-def get_shimmer_match_offset_from_seq(ref_seq, read_seq,
+def get_shimmer_match_offset_from_seq(read_seq, ref_seq,
                                       parameters={}):
     alns = get_shimmer_alns_from_seqs(ref_seq, read_seq,
                                       parameters=parameters)
