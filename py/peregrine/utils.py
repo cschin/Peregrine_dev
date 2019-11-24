@@ -296,40 +296,33 @@ def get_cns_from_reads(seqs, sort_reads=True, best_n=20,
     for i, seq in enumerate(seqs):
         if i == 0:
             continue
+
         rid = i * 2
-        shimmers1 = get_shimmers_from_seq(seq,
+        shimmers_ = get_shimmers_from_seq(seq,
                                           rid=rid,
                                           levels=levels,
                                           k=k, w=w)
-        alns_0 = get_shimmer_alns(shimmers0, shimmers1, 0)
-        alns_0.sort(key=lambda x: -len(x[0]))
-        del shimmers1
+        read_offset_n, aln_n = get_shimmer_match_offset(shimmers0, shimmers_)
+        del shimmers_
 
         rseq = rc(seq)
         rid = i * 2 + 1
-        shimmers1 = get_shimmers_from_seq(rseq,
+        shimmers_ = get_shimmers_from_seq(rseq,
                                           rid=rid,
                                           levels=levels,
                                           k=k, w=w)
-        alns_1 = get_shimmer_alns(shimmers0, shimmers1, 0)
-        alns_1.sort(key=lambda x: -len(x[0]))
-        del shimmers1
+        read_offset_r, aln_r = get_shimmer_match_offset(shimmers0, shimmers_)
+        del shimmers_
 
-        if len(alns_0) > 0 and len(alns_1) > 0:
-            if len(alns_0[0][0]) >= len(alns_1[0][0]):
-                aln = alns_0[0]
-            else:
-                aln = alns_1[0]
-                seq = rseq
-        elif len(alns_0) > 0:
-            aln = alns_0[0]
-        elif len(alns_1) > 0:
-            aln = alns_1[0]
-            seq = rseq
-        else:
+        read_offset = 0
+        if len(aln_n[0]) == 0 and len(aln_r[0]) == 0:
             continue
+        if len(aln_n[0]) > len(aln_r[0]):
+            read_offset = read_offset_n
+        else:
+            read_offset = read_offset_r
+            seq = rseq
 
-        read_offset = aln[0][0][0][3] - aln[0][0][1][3]
         tag = get_tag_from_seqs(seq, seq0, read_offset,
                                 max_dist=max_dist)
         if tag is not None:
