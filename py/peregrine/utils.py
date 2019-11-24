@@ -167,7 +167,6 @@ def get_shimmer_match_offset_from_seq(read_seq, ref_seq,
 def get_align_range(read_seq, ref_seq,
                     read_offset, max_dist=150,
                     aln_str=False):
-    rng = falcon_ffi.new("aln_range[1]")
     read_len = len(read_seq)
     ref_len = len(ref_seq)
     aligned = False
@@ -182,13 +181,8 @@ def get_align_range(read_seq, ref_seq,
                               ref_seq,
                               len(ref_seq),
                               max_dist, aln_str)
-        if abs(abs(aln.aln_q_e-aln.aln_q_s) -
-                (read_len - abs(read_offset))) < 48:
+        if abs(aln.aln_q_e-aln.aln_q_s) > 500:
             aligned = True
-            rng[0].s1 = aln.aln_q_s
-            rng[0].e1 = aln.aln_q_e
-            rng[0].s2 = aln.aln_t_s
-            rng[0].e2 = aln.aln_t_e
             t_offset = 0
     else:
         aln = falcon4py.align(read_seq,
@@ -196,37 +190,50 @@ def get_align_range(read_seq, ref_seq,
                               ref_seq[read_offset:ref_len],
                               ref_len-read_offset,
                               max_dist, aln_str)
-        if abs(abs(aln.aln_q_e - aln.aln_q_s) - read_len) < 48 or \
-                abs(ref_len -
-                    read_offset -
-                    abs(aln.aln_q_e - aln.aln_q_s)) < 48:
+        if abs(aln.aln_q_e-aln.aln_q_s) > 500:
             aligned = True
+            t_offset = read_offset
+    if not aligned:
+        falcon4py.free_alignment(aln)
+        aln = None
+    return aligned, aln, t_offset
+
+
+def get_tag_from_seqs(read_seq, ref_seq,
+                      read_offset,
+                      max_dist=150,
+                      aln_len_max_diff=48):
+    aligned, aln, t_offset = get_align_range(read_seq, ref_seq,
+                                             read_offset,
+                                             max_dist=max_dist,
+                                             aln_str=True)
+    tag = None
+    if aligned:
+        dovetail = False
+        read_len = len(read_seq)
+        ref_len = len(ref_seq)
+        if read_offset < 0:
+            if abs(abs(aln.aln_q_e - aln.aln_q_s) -
+                    (read_len - abs(read_offset))) < aln_len_max_diff:
+                dovetail = True
+        else:
+            if abs(abs(aln.aln_q_e - aln.aln_q_s) -
+                   read_len) < aln_len_max_diff or \
+               abs(ref_len - read_offset -
+                   abs(aln.aln_q_e - aln.aln_q_s)) < aln_len_max_diff:
+                dovetail = True
+        if dovetail:
+            rng = falcon_ffi.new("aln_range[1]")
             rng[0].s1 = aln.aln_q_s
             rng[0].e1 = aln.aln_q_e
             rng[0].s2 = aln.aln_t_s
             rng[0].e2 = aln.aln_t_e
-            t_offset = read_offset
-    if not aligned:
-        falcon_ffi.release(rng)
+            tag = falcon4py.get_align_tags(aln.q_aln_str,
+                                           aln.t_aln_str,
+                                           aln.aln_str_size,
+                                           rng, 0, t_offset)
+            falcon_ffi.release(rng)
         falcon4py.free_alignment(aln)
-        rng = None
-        aln = None
-    return aligned, aln, rng, t_offset
-
-
-def get_tag_from_seqs(read_seq, ref_seq, read_offset, max_dist=150):
-    aligned, aln, rng, t_offset = get_align_range(read_seq, ref_seq,
-                                                  read_offset,
-                                                  max_dist=max_dist,
-                                                  aln_str=True)
-    tag = None
-    if aligned:
-        tag = falcon4py.get_align_tags(aln.q_aln_str,
-                                       aln.t_aln_str,
-                                       aln.aln_str_size,
-                                       rng, 0, t_offset)
-        falcon4py.free_alignment(aln)
-        falcon_ffi.release(rng)
     return tag
 
 
