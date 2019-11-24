@@ -334,8 +334,6 @@ def get_cns_from_reads(seqs, sort_reads=True, best_n=20,
                                             len(seq0), 1)
     cns_seq = falcon_ffi.string(cns.sequence)
     falcon4py.free_consensus_data(cns)
-    # shimmer4py.free(shimmers0.a)
-    # shimmer_ffi.release(shimmers0)
     del shimmers0
     for i in range(aln_count):
         falcon4py.free_align_tags(tags[i])
