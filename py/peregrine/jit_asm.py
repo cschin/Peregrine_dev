@@ -1,10 +1,11 @@
-from .utils import SequenceDatabase
 from .utils import get_shimmers_from_seq
-from .utils import get_shimmer_alns
-from .utils import get_cigar
-from .utils import get_shimmer_alns_from_seqs
 from .utils import rc
 from .utils import mmer2tuple
+# from .utils import SequenceDatabase
+# from .utils import get_shimmer_alns
+# from .utils import get_cigar
+# from .utils import get_shimmer_alns_from_seqs
+
 import networkx as nx
 from collections import Counter
 from networkx.algorithms.dag import transitive_reduction
@@ -31,7 +32,9 @@ class JITAssembler(object):
         self.DAG = None
         self.anchor2read = None
 
-    def _get_read_shimmer_maps(self, min_dist=250):
+    def _get_read_shimmer_maps(self,
+                               min_dist=250,
+                               remove_repeat=False):
         """
         Loop through the reads, create the shimmer for each reads
         and build the map between the shimmers to reads and the
@@ -72,7 +75,8 @@ class JITAssembler(object):
 
             for key in mmpairs0:
                 pos = mmpairs0_pos[key]
-                if len(pos) > 1:  # duplicated SMP in a reads
+                # may filter out duplicated SMPs in a read
+                if remove_repeat and len(pos) > 1:
                     continue
                 pos = pos[0]
                 self.smp2reads.setdefault(key, [])
@@ -81,7 +85,8 @@ class JITAssembler(object):
 
             for key in mmpairs1[::-1]:
                 pos = mmpairs1_pos[key]
-                if len(pos) > 1:  # duplicated SMP in a reads
+                # may filter out duplicated SMPs in a read
+                if remove_repeat and len(pos) > 1:
                     continue
                 pos = pos[0]
                 self.smp2reads.setdefault(key, [])
@@ -99,7 +104,7 @@ class JITAssembler(object):
         """
         Create the interlocked draft anchor graph
         An "anchor" is a shimmer pair which is near
-        the end of a read but alsoe as an internal
+        the end of a read but also as an internal
         shimmer pair of other reads
         """
         for rid, smps in self.read2smps.items():
