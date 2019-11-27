@@ -3,10 +3,11 @@ from .utils import get_shimmer_alns
 from .utils import get_cigar
 from .utils import get_shimmer_alns_from_seqs
 from ._falcon4py import lib as falcon
-from ._falcon4py import ffi
 import vcfpy
-from intervaltree import Interval, IntervalTree
+from intervaltree import IntervalTree
 from collections import Counter
+# from ._falcon4py import ffi
+# from intervaltree import Interval, IntervalTree
 
 
 def get_shimmer_dots(seq0, seq1, levels=2, reduction_factor=6, k=16, w=80):
@@ -422,7 +423,7 @@ class SeqDBAligner(object):
             for v in vv:
                 ref_seg_s, reg_seg_e = v[0]
                 seq_seg_s, seq_seg_e = v[1]
-                diff = v[2]
+                # diff = v[2]
                 cigars, aln_score = get_cigar(seq0[ref_seg_s:reg_seg_e],
                                               seq1[seq_seg_s:seq_seg_e])
                 if aln_score < 0:
