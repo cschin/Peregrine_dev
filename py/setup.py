@@ -20,5 +20,5 @@ setup(name='peregrine',
       install_requires=["cffi>=1.12.0",
                         "docopt>=0.6.2",
                         "numpy>=1.16.2",
-                        "networkx==2.3",
+                        "networkx>=2.4",
                         "intervaltree==3.0.2"])
