@@ -1,0 +1,34 @@
+name: build
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      max-parallel: 4
+      matrix:
+        os: [ubuntu-latest]
+        python-version: [3.7]
+
+    steps:
+      - uses: actions/checkout@v1
+      - name: Setup conda
+        uses: s-weigand/setup-conda@master
+        with:
+          update-conda: true
+          python-version: ${{ matrix.python-version }}
+          conda-channels: anaconda, conda-forge
+      - name: Install dependencies
+        run: |
+          bash ./install_with_conda.sh
+        shell: bash
+      - name: Functional testing
+        run: |
+          bash ./test/functional_tests.sh
+        shell: bash
+      - name: Unit testing
+        run: |
+          python3 -m pip install pytest
+          pytest test/
+        shell: bash
