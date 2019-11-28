@@ -4,6 +4,7 @@ conda create -n peregrine -y python=3.7
 
 conda activate peregrine
 conda install -c conda-forge -y pypy3.6
+conda install -c bioconda -y pysam
 
 pushd py
 rm -rf .eggs/ dist/ build/ peregrine.egg-info/ peregrine_pypy.egg-info get-pip.py

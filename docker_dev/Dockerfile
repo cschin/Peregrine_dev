@@ -1,6 +1,7 @@
 FROM continuumio/miniconda3
 RUN apt-get update
 RUN apt-get install -y build-essential zlib1g zlib1g-dev
+RUN apt-get install -y libbz2-dev
 RUN mkdir /opt/build
 COPY src.tgz /opt/build
 COPY install_with_conda.sh /opt/build
@@ -21,5 +22,6 @@ COPY test/simulate_reads.py /opt/test
 COPY bashrc /root/.bashrc
 COPY entry.sh /opt/
 COPY entry_dev.sh /opt/
+COPY jupyterlab.sh /opt/
 WORKDIR /opt/test
 ENTRYPOINT ["/opt/entry_dev.sh"]
