@@ -10,7 +10,7 @@ import networkx as nx
 from collections import Counter
 from networkx.algorithms.dag import transitive_reduction
 from networkx.algorithms.dag import dag_longest_path
-from networkx import weakly_connected_component_subgraphs
+from networkx import weakly_connected_components
 
 
 class JITAssembler(object):
@@ -190,7 +190,7 @@ class JITAssembler(object):
 
         span_read_count = Counter()
 
-        for subG in weakly_connected_component_subgraphs(self.DAG):
+        for subG in [self.DAG.subgraph(c) for c in weakly_connected_components(self.DAG)]:
             path = dag_longest_path(subG)
             v = path[0]
             for w in path[1:]:
@@ -202,7 +202,8 @@ class JITAssembler(object):
         used_edges = set()
         ctgs = []
         edge_count = 0
-        for subG in weakly_connected_component_subgraphs(self.DAG):
+        for subG in [self.DAG.subgraph(c) for c in weakly_connected_components(self.DAG)]:
+            subG = subG.copy()
             while len(subG.edges) != 0:
                 path = dag_longest_path(subG)
                 v = path[0]
