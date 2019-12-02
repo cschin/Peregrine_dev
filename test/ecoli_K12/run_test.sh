@@ -36,5 +36,5 @@ echo $PWD/p_ctg.fa > p_ctg.lst
 time (/usr/bin/time shmr_mkseqdb -p $INDEX/p_ctg -d p_ctg.lst 2> build_p_ctg_db.log)
 time (for c in `seq 1 1`; do echo "/usr/bin/time shmr_index -p $INDEX/p_ctg -r 6 -t 1 -c $c -o $INDEX/p_ctg 2> build_p_ctg_index.$c.log" ; done | parallel -j 4)
 time (/usr/bin/time shmr_map -r $INDEX/p_ctg -m $INDEX/p_ctg-L2 -p $INDEX/seq_dataset -l $INDEX/shmr-L2 -t 1 -c 1 > read_map.txt 2> map.log)
-time (/usr/bin/time cns_prototype.py $INDEX/seq_dataset $INDEX/p_ctg read_map.txt 1 1 > p_ctg_cns.fa 2> cns.log)
+time (/usr/bin/time pg_asm_cns.py $INDEX/seq_dataset $INDEX/p_ctg read_map.txt 1 1 > p_ctg_cns.fa 2> cns.log)
 
