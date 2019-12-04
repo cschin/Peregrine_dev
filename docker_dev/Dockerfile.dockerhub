@@ -23,8 +23,8 @@ COPY docker_dev/test/Makefile /opt/test
 COPY docker_dev/test/run_test.sh /opt/test
 COPY docker_dev/test/simulate_reads.py /opt/test
 COPY docker_dev/bashrc /root/.bashrc
-COPY dovker_dev/entry.sh /opt/
-COPY dovker_dev/entry_dev.sh /opt/
-COPY dovker_dev/jupyterlab.sh /opt/
+COPY docker_dev/entry.sh /opt/
+COPY docker_dev/entry_dev.sh /opt/
+COPY docker_dev/jupyterlab.sh /opt/
 WORKDIR /opt/test
 ENTRYPOINT ["/opt/entry_dev.sh"]
