@@ -3,6 +3,7 @@ RUN apt-get update
 RUN apt-get install -y build-essential zlib1g zlib1g-dev
 RUN apt-get install -y libbz2-dev
 RUN mkdir /opt/build
+RUN mkdir /wd
 COPY docker_dev/install_with_conda.sh /opt/build
 COPY src/ /opt/build/src/
 COPY falcon/ /opt/build/falcon/
