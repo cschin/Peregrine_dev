@@ -85,13 +85,15 @@ int main(int argc, char *argv[]) {
 				b_bgn = b_bgn < 0 ? 0 : b_bgn;              //this ad-hoc fix
 				b_end = b_end >= rlen1 ? rlen1 : b_end;
 			}
-			double err_est;
+			double err_est, err_est2;
 			err_est	= 100.0 - 100.0 * (double) (match.dist) / (double) (match.m_size);
-			fprintf(stdout,"%09d %09d %d %0.1f %u %d %d %u %u %d %d %u %s\n",
+			err_est2	= 100.0 - 100.0 * (double) (match.dist - match.hp_corr_count) / (double) (match.m_size);
+			fprintf(stdout,"%09d %09d %d %0.1f %u %d %d %u %u %d %d %u %s %0.1f %u %u\n",
 					rid0, rid1, -(match.m_size), err_est,
 					ORIGINAL, a_bgn, a_end, rlen0,
 					(strand0 == ORIGINAL ? strand1 : 1-strand1), b_bgn, b_end, rlen1,
-					ovlp.ovlp_type == OVERLAP ? "overlap" : (ovlp.ovlp_type == CONTAINS ? "contains" : "contained"));
+					ovlp.ovlp_type == OVERLAP ? "overlap" : (ovlp.ovlp_type == CONTAINS ? "contains" : "contained"),
+                    err_est2, match.hp_corr_count, match.dist);
 			kh_put(RPAIR, rid_pairs, ridp, &absent);
 		}
 	}

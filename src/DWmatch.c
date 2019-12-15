@@ -65,9 +65,10 @@ ovlp_match_t * ovlp_match(uint8_t * query_seq, seq_coor_t q_len, uint8_t q_stran
 		seq_coor_t band_tolerance) {
     seq_coor_t * V;
     seq_coor_t * U;  // array of matched bases for each "k"
+    seq_coor_t * H;  // track homopolymer strech for each "k"
     seq_coor_t k_offset;
     seq_coor_t d;
-    seq_coor_t k, k2;
+    seq_coor_t k, k2, pre_k;
     seq_coor_t best_m;  // the best "matches" for each d
     seq_coor_t min_k, new_min_k;
     seq_coor_t max_k, new_max_k;
@@ -83,6 +84,7 @@ ovlp_match_t * ovlp_match(uint8_t * query_seq, seq_coor_t q_len, uint8_t q_stran
 
     ovlp_match_t * rtn;
     bool matched = false;
+    uint32_t hp_corr_count = 0;
 
 
 	q_shift = q_strand == 0 ? 0 : 4;
@@ -97,6 +99,7 @@ ovlp_match_t * ovlp_match(uint8_t * query_seq, seq_coor_t q_len, uint8_t q_stran
 
     V = calloc( max_d * 2 + 1, sizeof(seq_coor_t) );
     U = calloc( max_d * 2 + 1, sizeof(seq_coor_t) );
+    H = calloc( max_d * 2 + 1, sizeof(seq_coor_t) );
 
     k_offset = max_d;
 
@@ -122,20 +125,40 @@ ovlp_match_t * ovlp_match(uint8_t * query_seq, seq_coor_t q_len, uint8_t q_stran
         for (k = min_k; k <= max_k;  k += 2) {
 
             if ( (k == min_k) || ((k != max_k) && (V[ k - 1 + k_offset ] < V[ k + 1 + k_offset])) ) {
+                pre_k = k + 1;
                 x = V[ k + 1 + k_offset];
             } else {
+                pre_k = k - 1;
                 x = V[ k - 1 + k_offset] + 1;
             }
             y = x - k;
             x1 = x;
 			y1 = y;
 
-            while ( x < q_len && y < t_len && ((query_seq[x] >> q_shift) & 0x0F) == ((target_seq[y] >> t_shift) & 0x0F)){
+            uint32_t hp_count = 0;
+            uint8_t qb, tb, qb_, tb_;
+            qb = (query_seq[x] >> q_shift) & 0x0F;
+            tb = (target_seq[y] >> t_shift) & 0x0F;
+            while(1) {
+                if (x >= q_len || y >= t_len || qb != tb) {
+                    break;
+                }
                 x++;
                 y++;
+                if  (x < q_len && y < t_len) { 
+                    qb_ = (query_seq[x] >> q_shift) & 0x0F;
+                    tb_ = (target_seq[y] >> t_shift) & 0x0F;
+                    if ( qb_ == qb || tb_ == tb)   {
+                        hp_count += 1;
+                    } else {
+                        hp_count = 0;
+                    }
+                    qb = qb_;
+                    tb = tb_;
+                }
             }
 
-			if ( (x - x1 > 16) && (start == false) ) {
+			if ( (x - x1 > 16) && (start == false) ) { // estimatied initial positition might be off, this allow small correction
 				rtn->q_bgn = x1;
 				rtn->t_bgn = y1;
 				start = true;
@@ -149,6 +172,9 @@ ovlp_match_t * ovlp_match(uint8_t * query_seq, seq_coor_t q_len, uint8_t q_stran
 
             V[ k + k_offset ] = x;
             U[ k + k_offset ] = x + y;
+            if (hp_count > 1) {
+                H[ k + k_offset ] = H[ pre_k + k_offset ] + 1;
+            }
 
             if ( x + y > best_m) {
                 best_m = x + y;
@@ -156,6 +182,7 @@ ovlp_match_t * ovlp_match(uint8_t * query_seq, seq_coor_t q_len, uint8_t q_stran
 
             if ( x >= q_len || y >= t_len) {
                 matched = true;
+                hp_corr_count = H[ k + k_offset ];
                 break;
             }
         }
@@ -182,8 +209,10 @@ ovlp_match_t * ovlp_match(uint8_t * query_seq, seq_coor_t q_len, uint8_t q_stran
             rtn->q_end = x;
             rtn->t_end = y;
             rtn->dist = d;
+            rtn->hp_corr_count = hp_corr_count;
 			// we don't really generate the alingment path here, so we can only estimate the alignment string size
             rtn->m_size = (rtn->q_end - rtn->q_bgn + rtn->t_end - rtn->t_bgn + 2*d) / 2;
+
             break;
         } 
     }
@@ -194,6 +223,7 @@ ovlp_match_t * ovlp_match(uint8_t * query_seq, seq_coor_t q_len, uint8_t q_stran
 
     free(V);
     free(U);
+    free(H);
     return rtn;
 }
 
