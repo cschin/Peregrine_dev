@@ -158,6 +158,7 @@ def get_shimmer_match_offset_from_seq(read_seq, ref_seq,
                                       parameters=parameters)
     if len(alns) == 0:
         return (None, [[]])
+
     alns.sort(key=lambda x: -len(x[0]))
     aln = alns[0]
     read_offset = aln[0][0][0][3] - aln[0][0][1][3]
@@ -274,7 +275,8 @@ def get_best_seqs(seqs, best_n=20, levels=2, k=16, w=80):
 
 
 def get_cns_from_reads(seqs, sort_reads=True, best_n=20,
-                       levels=2, k=16, w=80, max_dist=150):
+                       levels=2, k=16, w=80, max_dist=150,
+                       min_cov=1):
 
     aln_count = 0
     tags = falcon_ffi.new("align_tags_t * [{}]".format(len(seqs)+1))
@@ -331,7 +333,8 @@ def get_cns_from_reads(seqs, sort_reads=True, best_n=20,
 
     cns = falcon4py.get_cns_from_align_tags(tags,
                                             aln_count,
-                                            len(seq0), 1)
+                                            len(seq0),
+                                            min_cov=2)
     cns_seq = falcon_ffi.string(cns.sequence)
     falcon4py.free_consensus_data(cns)
     del shimmers0

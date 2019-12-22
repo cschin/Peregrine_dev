@@ -190,7 +190,8 @@ class JITAssembler(object):
 
         span_read_count = Counter()
 
-        for subG in [self.DAG.subgraph(c) for c in weakly_connected_components(self.DAG)]:
+        for subG in [self.DAG.subgraph(c)
+                     for c in weakly_connected_components(self.DAG)]:
             path = dag_longest_path(subG)
             v = path[0]
             for w in path[1:]:
@@ -202,7 +203,8 @@ class JITAssembler(object):
         used_edges = set()
         ctgs = []
         edge_count = 0
-        for subG in [self.DAG.subgraph(c) for c in weakly_connected_components(self.DAG)]:
+        for subG in [self.DAG.subgraph(c)
+                     for c in weakly_connected_components(self.DAG)]:
             subG = subG.copy()
             while len(subG.edges) != 0:
                 path = dag_longest_path(subG)
