@@ -334,7 +334,17 @@ class SeqDBAligner(object):
 
         return candidates
 
-    def get_align_segments(self, rname, start, end):
+    def get_align_segments(self, rname, start, end, direction="both"):
+        """
+        Get algin segement from the reference to the contigs using
+        the greedy shimmer alignment algorithm. The is useful for identify
+        the regions of the contigs that map to a specific regions of
+        the reference specified by `rname`, `start`, and `end`. An
+        option `direction={"both", "forward", "reversed", "auto"` can
+        be used for finding alignments for a specific direction. Set
+        `direction` to "auto" will automatically find the best direction
+        for the alignemnt.
+        """
         ref_seq = self.sdb0.get_subseq_by_name(rname, start, end)
         ref_shimmers = get_shimmers_from_seq(ref_seq, rid=0,
                                              reduction_factor=12)
@@ -348,38 +358,50 @@ class SeqDBAligner(object):
                 b = itvl.begin if itvl.begin > 0 else 0
                 ctg_len = self.sdb1.index_data[k].length
                 e = itvl.end if itvl.end < ctg_len else ctg_len
-                direction = Counter(itvl.data).most_common(1)[0][0]
-                ctg_seq = self.sdb1.get_subseq_by_rid(k, b, e, direction)
-                ctg_shimmers = get_shimmers_from_seq(ctg_seq, rid=k,
-                                                     reduction_factor=12)
-                shimmer_alns = get_shimmer_alns(ref_shimmers,
-                                                ctg_shimmers,
-                                                direction=0,
-                                                max_diff=1000,
-                                                max_dist=15000,
-                                                max_repeat=1)
-                for aln, aln_d in shimmer_alns:
-                    if len(aln) < 5:
-                        continue
-                    align_err = []
-                    for i in range(len(aln)-1):
-                        mmer0, mmer1 = aln[i][0:2]
-                        x0, y0 = mmer0[3], mmer1[3]
-                        mmer0, mmer1 = aln[i+1][0:2]
-                        x1, y1 = mmer0[3], mmer1[3]
-                        seq0 = ref_seq[x0:x1]
-                        seq1 = ctg_seq[y0:y1]
-                        estimate_err = -1
-                        seq_aln = falcon.align(
-                            seq0, len(seq0), seq1, len(seq1), 500, 1)
-                        if seq_aln.aln_str_size > 0:
-                            estimate_err = \
-                                100.0 * seq_aln.dist / seq_aln.aln_str_size
-                        align_err.append(
-                            ((start+x0, start+x1), (b+y0, b+y1), estimate_err))
-                    align_segs[((rid, aln[0][0][3], aln[-1][0][3]),
-                                (k, aln[0][1][3], aln[-1][1][3]),
-                                direction)] = align_err
+                if direction == "both":
+                    directions = [0, 1]
+                elif direction == "forward":
+                    directions = [0]
+                elif direction == "reversed":
+                    directions = [1]
+                else:
+                    best_direction = Counter(itvl.data).most_common(1)[0][0]
+                    directions = [best_direction]
+
+                for direction_ in directions:
+                    ctg_seq = self.sdb1.get_subseq_by_rid(k, b, e, direction_)
+                    ctg_shimmers = get_shimmers_from_seq(ctg_seq, rid=k,
+                                                         reduction_factor=12)
+                    shimmer_alns = get_shimmer_alns(ref_shimmers,
+                                                    ctg_shimmers,
+                                                    direction=0,
+                                                    max_diff=1000,
+                                                    max_dist=15000,
+                                                    max_repeat=1)
+                    for aln, aln_d in shimmer_alns:
+                        if len(aln) < 5:
+                            continue
+                        align_err = []
+                        for i in range(len(aln)-1):
+                            mmer0, mmer1 = aln[i][0:2]
+                            x0, y0 = mmer0[3], mmer1[3]
+                            mmer0, mmer1 = aln[i+1][0:2]
+                            x1, y1 = mmer0[3], mmer1[3]
+                            seq0 = ref_seq[x0:x1]
+                            seq1 = ctg_seq[y0:y1]
+                            estimate_err = -1
+                            seq_aln = falcon.align(
+                                seq0, len(seq0), seq1, len(seq1), 500, 1)
+                            if seq_aln.aln_str_size > 0:
+                                estimate_err = \
+                                    100.0 * seq_aln.dist / seq_aln.aln_str_size
+                            align_err.append(
+                                ((start+x0, start+x1),
+                                 (b+y0, b+y1),
+                                 estimate_err))
+                        align_segs[((rid, aln[0][0][3], aln[-1][0][3]),
+                                    (k, aln[0][1][3], aln[-1][1][3]),
+                                    direction_)] = align_err
         return align_segs
 
     def write_align_segments_to_bed(self, aln_segs, file_path):
