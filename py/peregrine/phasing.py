@@ -231,7 +231,7 @@ class GraphPhaser(object):
                         if r not in read2phase:
                             read2phase[r] = 0
                 pre_delta = delta
-            if i == 0:
+            if i == 0 and last_bgn_delta is not None and pre_delta is not None:
                 blocks.append((last_bgn_delta[0], pre_delta[0]))
             for r in read2phase:
                 phases = [delta2phase[_] for _ in list(self.read2deltas2[r])]
