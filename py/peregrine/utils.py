@@ -204,6 +204,8 @@ def get_tag_from_seqs(read_seq, ref_seq,
                       read_offset,
                       max_dist=150,
                       aln_len_max_diff=48):
+    if read_offset is None:
+        return None
     aligned, aln, t_offset = get_align_range(read_seq, ref_seq,
                                              read_offset,
                                              max_dist=max_dist,
@@ -324,7 +326,8 @@ def get_cns_from_reads(seqs, sort_reads=True, best_n=20,
         else:
             read_offset = read_offset_r
             seq = rseq
-
+        if read_offset is None:
+            continue
         tag = get_tag_from_seqs(seq, seq0, read_offset,
                                 max_dist=max_dist)
         if tag is not None:
@@ -334,7 +337,7 @@ def get_cns_from_reads(seqs, sort_reads=True, best_n=20,
     cns = falcon4py.get_cns_from_align_tags(tags,
                                             aln_count,
                                             len(seq0),
-                                            min_cov=2)
+                                            min_cov)
     cns_seq = falcon_ffi.string(cns.sequence)
     falcon4py.free_consensus_data(cns)
     del shimmers0
