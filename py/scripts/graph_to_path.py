@@ -190,7 +190,7 @@ def run(improper_p_ctg, proper_a_ctg, seqdb_prefix, sg_edges_list_fn, utg_data_f
             utg_data[(s, v, t)] = type_, length, score, path_or_edges
 
     p_ctg_t_out = open("p_ctg_tiling_path", "w")
-    a_ctg_t_out = open("a_ctg_all_tiling_path", "w")
+    a_ctg_t_out = open("a_ctg_tiling_path", "w")
     layout_ctg = set()
 
     with open_progress(ctg_paths_fn) as f:
@@ -291,6 +291,8 @@ def run(improper_p_ctg, proper_a_ctg, seqdb_prefix, sg_edges_list_fn, utg_data_f
 
                 # Compose the base sequence.
                 for sub_id in range(len(a_ctg_group[(v, w)])):
+                    if sub_id == 0:  # the alte path is used in the primary
+                        continue
                     score, atig_path = a_ctg_group[(v, w)][sub_id]
                     atig_path_edges = list(zip(atig_path[:-1], atig_path[1:]))
 
@@ -335,7 +337,7 @@ We write these:
     p_ctg_out = open("p_ctg.fa", "w")
     a_ctg_out = open("a_ctg_all.fa", "w")
     p_ctg_t_out = open("p_ctg_tiling_path", "w")
-    a_ctg_t_out = open("a_ctg_all_tiling_path", "w")
+    a_ctg_t_out = open("a_ctg_tiling_path", "w")
 """
     parser = argparse.ArgumentParser(
             description=description,
