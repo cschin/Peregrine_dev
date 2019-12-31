@@ -290,7 +290,7 @@ def run(improper_p_ctg, proper_a_ctg, seqdb_prefix, sg_edges_list_fn, utg_data_f
                 atig_output = []
 
                 # Compose the base sequence.
-                for sub_id in range(len(a_ctg_group[(v, w)])):
+                for sub_id in range(0, len(a_ctg_group[(v, w)])):
                     if sub_id == 0:  # the alte path is used in the primary
                         continue
                     score, atig_path = a_ctg_group[(v, w)][sub_id]
@@ -311,10 +311,7 @@ def run(improper_p_ctg, proper_a_ctg, seqdb_prefix, sg_edges_list_fn, utg_data_f
                                         a_ctg_id, a_edge_lines,
                                         delta_len, idt, cov))
 
-                if len(atig_output) == 1:
-                    continue
-
-                for sub_id, data in enumerate(atig_output):
+                for data in atig_output:
                     (v, w, tig_path, a_total_length, a_total_score,
                      tig_path_edges, a_ctg_id, a_edge_lines,
                      delta_len, a_idt, cov) = data
