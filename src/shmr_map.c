@@ -52,7 +52,8 @@ void process_map(
 		khash_t(RLEN) * ref_lmap, 
 		khash_t(MMER0) * mmer0_map, 
 		khash_t(RLEN) * rlmap, 
-		khash_t(MMC) *mcmap) {
+		khash_t(MMC) *mcmap,
+		uint32_t lowerbound, uint32_t upperbound) {
 
 	int rfd, sfd;
 	struct stat rsb, ssb;
@@ -97,8 +98,15 @@ void process_map(
 	for( size_t i=s+1; i < ref_mmers->n; i++ ){
 
 		mmer1 = ref_mmers->a[i];
+		uint64_t mhash = mmer1.x >> 8;
+		k = kh_get(MMC, mcmap, mhash);
+		if (k == kh_end(mcmap))
+			continue;
+		uint32_t mcount = kh_val(mcmap, k);
+		if (mcount < lowerbound || mcount > upperbound)
+			continue;
 
-	    if ((mmer0.y >> 32) != (mmer1.y >> 32)) {  
+		if ((mmer0.y >> 32) != (mmer1.y >> 32)) {  
 			mmer0 = mmer1;
 			continue; // the pairs are in the same read
 		}
@@ -179,6 +187,7 @@ int main(int argc, char *argv[]) {
 	uint32_t total_chunk = 1, mychunk = 1;
 
 	uint32_t mc_upper = MMER_COUNT_UPPER_BOUND;
+	uint32_t mc_lower = MMER_COUNT_LOWER_BOUND;
 
 	wordexp_t p; 
 	char **mmc_fns; 
@@ -200,7 +209,7 @@ int main(int argc, char *argv[]) {
 	
 	opterr = 0;
 
-	while ((c = getopt(argc, argv, "r:m:p:l:M:t:c:b:")) != -1) {
+	while ((c = getopt(argc, argv, "r:m:p:l:M:n:t:c:b:")) != -1) {
 		switch (c) {
 			case 'r':
 				refdb_prefix = optarg;
@@ -216,6 +225,9 @@ int main(int argc, char *argv[]) {
 				break;
 			case 'M':
 				mc_upper = atoi(optarg);
+				break;
+			case 'n':
+				mc_lower = atoi(optarg);
 				break;
 			case 't':
 				total_chunk = atoi(optarg);
@@ -340,11 +352,12 @@ int main(int argc, char *argv[]) {
 	build_map(&mmers, mmer0_map, 
 			rlmap, mcmap,
 			mychunk, total_chunk, 
-			MMER_COUNT_LOWER_BOUND, mc_upper);
+			mc_lower, mc_upper);
 
 	process_map(refdb_file_path, seqdb_file_path, 
 			&ref_mmers, ref_lmap, mmer0_map, 
-			rlmap, mcmap);
+			rlmap, mcmap,
+			mc_lower, mc_upper);
 
 	for (khiter_t __i = kh_begin(mmer0_map); __i != kh_end(mmer0_map); ++__i) {
 		if (!kh_exist(mmer0_map,__i)) continue;

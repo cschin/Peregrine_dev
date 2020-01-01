@@ -449,6 +449,8 @@ echo {input.ctg} > ctg.lst
     -m {params.ctg_idx_prefix} \
     -p {params.read_db_prefix} \
     -l {params.index_prefix} \
+    -M {params.mc_upper} \
+    -n {params.mc_lower} \
     -t {params.n_chunk} -c {params.my_chunk}  > {output.readmap}
 """
     inputs = {}
@@ -475,6 +477,8 @@ echo {input.ctg} > ctg.lst
                 'ctg_idx_prefix': ctg_idx_abs_prefix,
                 'n_chunk': mapping_nchunk,
                 'my_chunk': my_chunk,
+                'mc_upper': int(args["--mc_upper"],
+                'mc_lower': int(args["--mc_lower"])
             },
             dist=Dist(NPROC=1, local=True)
         ))
