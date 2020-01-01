@@ -477,7 +477,7 @@ echo {input.ctg} > ctg.lst
                 'ctg_idx_prefix': ctg_idx_abs_prefix,
                 'n_chunk': mapping_nchunk,
                 'my_chunk': my_chunk,
-                'mc_upper': int(args["--mc_upper"],
+                'mc_upper': int(args["--mc_upper"]),
                 'mc_lower': int(args["--mc_lower"])
             },
             dist=Dist(NPROC=1, local=True)
