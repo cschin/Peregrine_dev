@@ -178,6 +178,8 @@ int main(int argc, char *argv[]) {
         int c;	
 	uint32_t total_chunk = 1, mychunk = 1;
 
+	uint32_t mc_upper = MMER_COUNT_UPPER_BOUND;
+
 	wordexp_t p; 
 	char **mmc_fns; 
 	char **shimmer_fns;
@@ -211,6 +213,9 @@ int main(int argc, char *argv[]) {
 				break;
 			case 'l':
 				shimmer_prefix = optarg;
+				break;
+			case 'M':
+				mc_upper = atoi(optarg);
 				break;
 			case 't':
 				total_chunk = atoi(optarg);
@@ -335,7 +340,7 @@ int main(int argc, char *argv[]) {
 	build_map(&mmers, mmer0_map, 
 			rlmap, mcmap,
 			mychunk, total_chunk, 
-			MMER_COUNT_LOWER_BOUND, MMER_COUNT_UPPER_BOUND);
+			MMER_COUNT_LOWER_BOUND, mc_upper);
 
 	process_map(refdb_file_path, seqdb_file_path, 
 			&ref_mmers, ref_lmap, mmer0_map, 
