@@ -200,7 +200,7 @@ int main(int argc, char *argv[]) {
 	
 	opterr = 0;
 
-	while ((c = getopt(argc, argv, "r:m:p:l:t:c:b:")) != -1) {
+	while ((c = getopt(argc, argv, "r:m:p:l:M:t:c:b:")) != -1) {
 		switch (c) {
 			case 'r':
 				refdb_prefix = optarg;
