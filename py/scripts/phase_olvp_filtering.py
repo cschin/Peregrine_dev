@@ -11,7 +11,7 @@ read_db_prefix = sys.argv[1]
 total_chunks = int(sys.argv[2])
 my_chunk = int(sys.argv[3])
 
-sig_pattern = re.compile(rb"[^-]{12}-[^-]{12}")
+sig_pattern = re.compile(rb"[^-]{12}[-][^-]{12}")
 
 
 def hp_compress(s):
@@ -29,7 +29,7 @@ if __name__ == "__main__":
     read_sdb = SequenceDatabase(
         f"{read_db_prefix}.idx",
         f"{read_db_prefix}.seqdb")
-    with open("preads.ovl.2") as f:
+    with open("preads.ovl") as f:
         for r in f:
             r = r.strip().split()
             if r[0] == "-":
@@ -50,6 +50,7 @@ if __name__ == "__main__":
 
         sig_list = {}
         aln_set = set()
+        hpc_seqs = {}
         for r in ovlps[r0]:
             #print(k,r, ovlps[k][r])
             rid = int(r0)
@@ -82,6 +83,7 @@ if __name__ == "__main__":
                     seq1 = rc(seq1)
 
             seq1 = hp_compress(seq1)
+            hpc_seqs[r] = seq1
 
             aligend, aln, t_offset = get_align_range(seq1, seq0, 0,
                                                      max_dist=250,
@@ -90,8 +92,11 @@ if __name__ == "__main__":
             if aligend is not True:
                 continue
 
-            s = falcon_ffi.string(aln.q_aln_str)
-            for p in sig_pattern.findall(s):
+            q_aln_str = falcon_ffi.string(aln.q_aln_str)
+            t_aln_str = falcon_ffi.string(aln.t_aln_str)
+            for m in sig_pattern.finditer(q_aln_str):
+                s, e = m.span()
+                p = q_aln_str[s:e], t_aln_str[s:e]
                 sig_list.setdefault(p, [])
                 sig_list[p].append(rid2)
             if aln is not None:
@@ -99,24 +104,56 @@ if __name__ == "__main__":
             aln_set.add(rid2)
 
         sig_count = Counter(sig_list)
-        anti_phase_set = set()
-        for k, v in sig_count.items():
-            if abs(len(v)/len(aln_set) - 0.5) > 0.4:
-                continue
-            if len(v) < 3 or len(aln_set)-len(v) < 3:
-                continue
-            if r0 not in set(v):
-                for rid in v:
-                    assert r0 != rid
-                    anti_phase_set.add(rid)
 
-        #anti_phase_set, aln_set = get_aln_signatures(seqs, rid)
-        #print(anti_phase_set, aln_set, len(anti_phase_set), len(aln_set), len(ovlps[r0]))
+        marker_count = {}
+        read_to_marker_count = {}
+        for k, v in sig_count.items():
+            m0, m1 = k
+            m0_ = m0.replace(b"-", b"")
+            m1_ = m1.replace(b"-", b"")
+            c0 = 0
+            c1 = 0
+            for r in ovlps[r0]:
+                read_to_marker_count.setdefault(r, [[], []])
+                seq = hpc_seqs[r]
+                tmp = len(re.findall(m0_, seq))
+                if tmp > 0:
+                    c0 += tmp
+                    read_to_marker_count[r][0].append(m0)
+
+                tmp = len(re.findall(m1_, seq))
+                if tmp > 0:
+                    c1 += tmp
+                    read_to_marker_count[r][1].append(m1)
+                    # print(m1)
+
+            if c0 > 2 and c1 > 2:
+                marker_count[m0] = c0
+                marker_count[m1] = c1
+
         for r in ovlps[r0]:
-            if int(r) in anti_phase_set:
-                flag = 0
+            if r not in read_to_marker_count:
+                c0 = 0
+                c1 = 0
             else:
+                c0 = 0
+                for m in read_to_marker_count[r][0]:
+                    if marker_count.get(m, 0) > 0:
+                        c0 += 1
+                    #print(0, m, marker_count.get(m, 0))
+                #print()
+                c1 = 0
+                for m in read_to_marker_count[r][1]:
+                    if marker_count.get(m, 0) > 0:
+                        c1 += 1
+                    #print(1, m, marker_count.get(m,0))
+                #print(r, c0 ,c1)
+                #print()
+            flag = 0
+            if c0 == 0 and c1 > 0:
                 flag = 1
             d = ovlps[r0][r][1]
-            print(" ".join(d), flag)
+
+            print(" ".join(d), flag, c0, c1)
+
 
