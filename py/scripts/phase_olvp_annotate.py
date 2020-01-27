@@ -9,7 +9,7 @@ import sys
 
 ## currently for interanl use
 read_db_prefix = sys.argv[1]
-overlap_file = sys.arge[2]
+overlap_file = sys.argv[2]
 total_chunks = int(sys.argv[3])
 my_chunk = int(sys.argv[4])
 
