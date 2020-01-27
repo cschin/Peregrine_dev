@@ -59,7 +59,7 @@ def get_kmer_count(rid, ovlps, k=31):
             seq = read_sdb.get_subseq_by_rid(rid2, s, e, direction=direction)
         
         seq, _ = hp_compress(seq)
-        support_reads[rid2] = seq, ref_s, ref_e, direction, ovlps[rid][rid2][1]
+        support_reads[rid2] = seq, coor_map[ref_s], coor_map[ref_e-1], direction, ovlps[rid][rid2][1]
         cov[coor_map[ref_s]:coor_map[ref_e-1]-k+1] += 1 
         for i in range(0, len(seq)-k):
             count[seq[i:i+k]] += 1
