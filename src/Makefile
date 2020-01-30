@@ -3,10 +3,9 @@
 
 CC=gcc
 CFLAGS=-O3 
-CFLAGS+=-Wall -Wno-unused-result -Wno-unused-function -Werror
-#CFLAGS+=-Wall -Wno-unused-result -Wno-unused-function
+CFLAGS+=-Wall -Wno-unused-result -Wno-unused-function -Werror -Werror=unused-but-set-variable
 LDLIBS=-lz
-ALL=shmr_mkseqdb shmr_index shmr_gather_mc shmr_overlap shmr_dedup shmr_map
+ALL=shmr_mkseqdb shmr_index shmr_gather_mc shmr_overlap shmr_dedup shmr_map shmr_overlap_annotate
 
 all: $(ALL)
 
@@ -41,6 +40,8 @@ shmr_overlap: shmr_overlap.c shmr_utils.o kalloc.o  DWmatch.o
 shmr_map: shmr_map.c shmr_utils.o kalloc.o  DWmatch.o
 
 shmr_dedup: shmr_dedup.c kalloc.o
+
+shmr_overlap_annotate: shmr_overlap_annotate.c kalloc.o shmr_utils.o
 
 shmr_dedup2: shmr_dedup2.c kalloc.o
 
