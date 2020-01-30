@@ -257,7 +257,6 @@ int main(int argc, char *argv[]) {
     handle_error("fstat");
 
   ovlp_file = fopen("preads.ovl", "r");
-  ovlp_rec_t ovlp;
   khash_t(OVLP) * ovlp_map = kh_init(OVLP);
   ovlp_rec_v_t * ovlp_rec_v;
   build_ovlp_map(ovlp_file, ovlp_map);
@@ -354,7 +353,6 @@ int main(int argc, char *argv[]) {
     uint64_t kmer_int64 = 0;
     uint32_t count = 0;
     uint32_t total_markers = 0;
-    int32_t absent;
     marker_v_t markers;
     marker_t marker;
 
