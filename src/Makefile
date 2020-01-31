@@ -51,5 +51,5 @@ install:
 
 clean:
 	rm -f shmr_dedup shmr_gather_mc shmr_overlap \
-		shmr_map shmr_mkseqdb shmr_index \
+		shmr_map shmr_mkseqdb shmr_index shmr_overlap_annotate \
 		shmr_gather_mc *.o *.so; rm -rf ./bin/
