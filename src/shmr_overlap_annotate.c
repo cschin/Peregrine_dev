@@ -14,6 +14,9 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 
+extern char *optarg;
+extern int optind, opterr, optopt;
+
 #define OVERLAP 0
 #define CONTAINS 1
 #define CONTAINED 2
@@ -194,7 +197,8 @@ void fill_kmer_count(hpc_seq_t * seq, khash_t(KMERCOUNT) *kmer_count) {
   }  
 }
 
-void build_ovlp_map(FILE *ovlp_file, khash_t(OVLP) * ovlp_map) {
+void build_ovlp_map(FILE *ovlp_file, khash_t(OVLP) * ovlp_map,
+                  uint32_t total_chunk, uint32_t my_chunk) {
   khiter_t k;
   uint32_t nr;
   ovlp_rec_t ovlp;
@@ -213,59 +217,201 @@ void build_ovlp_map(FILE *ovlp_file, khash_t(OVLP) * ovlp_map) {
     if (nr == 0 || nr == EOF) {
       break;
     }
-    k = kh_put(OVLP, ovlp_map, ovlp.a_rid, &absent);
-    if (absent) {
-      ovlp_rec_v = kmalloc(NULL, sizeof(ovlp_rec_v_t));
-      ovlp_rec_v->n = 0;
-      ovlp_rec_v->m = 0;
-      ovlp_rec_v->a = NULL;
-      kh_value(ovlp_map, k) = ovlp_rec_v; 
-    } else {
-      ovlp_rec_v = kh_value(ovlp_map, k); 
+    if (ovlp.a_rid % total_chunk == my_chunk % total_chunk) {
+      k = kh_put(OVLP, ovlp_map, ovlp.a_rid, &absent);
+      if (absent) {
+        ovlp_rec_v = kmalloc(NULL, sizeof(ovlp_rec_v_t));
+        ovlp_rec_v->n = 0;
+        ovlp_rec_v->m = 0;
+        ovlp_rec_v->a = NULL;
+        kh_value(ovlp_map, k) = ovlp_rec_v;
+      } else {
+        ovlp_rec_v = kh_value(ovlp_map, k);
+      }
+      kv_push(ovlp_rec_t, NULL, *ovlp_rec_v, ovlp);
     }
 
-    kv_push(ovlp_rec_t, NULL, *ovlp_rec_v, ovlp);
-
-    k = kh_put(OVLP, ovlp_map, ovlp.b_rid, &absent);
-    if (absent) {
-      ovlp_rec_v = kmalloc(NULL, sizeof(ovlp_rec_v_t));
-      ovlp_rec_v->n = 0;
-      ovlp_rec_v->m = 0;
-      ovlp_rec_v->a = NULL;
-      kh_value(ovlp_map, k) = ovlp_rec_v; 
+    if (ovlp.b_rid % total_chunk == my_chunk % total_chunk) {
+      k = kh_put(OVLP, ovlp_map, ovlp.b_rid, &absent);
+      if (absent) {
+        ovlp_rec_v = kmalloc(NULL, sizeof(ovlp_rec_v_t));
+        ovlp_rec_v->n = 0;
+        ovlp_rec_v->m = 0;
+        ovlp_rec_v->a = NULL;
+        kh_value(ovlp_map, k) = ovlp_rec_v;
+      } else {
+        ovlp_rec_v = kh_value(ovlp_map, k);
+      }
+      kv_push(ovlp_rec_t, NULL, *ovlp_rec_v, ovlp);
+    }
+  }
+}
+typedef khash_t(OVLP) OVLP_t;
+typedef khash_t(RLEN) RLEN_t;
+typedef khash_t(KMERCOUNT) KMERCOUNT_t;
+void get_all_kmer_count(uint32_t rid, hpc_seq_t * a_cseq,
+                        ovlp_rec_v_t *ovlp_rec_v, OVLP_t * ovlp_map,
+                        uint8_t *seq_p, RLEN_t * rlmap,
+                        uint32_t * cov, KMERCOUNT_t * kmer_count,
+                        ovlp_hpc_seq_v_t *ovlp_seqs) {
+  for (size_t i = 0; i < ovlp_rec_v->n; i++) {
+    ovlp_rec_t ovlp;
+    ovlp = ovlp_rec_v->a[i];
+    uint32_t a_rid, b_rid;
+    int32_t a_bgn, a_end;
+    int32_t b_bgn, b_end;
+    uint32_t a_len, b_len;
+    a_rid = ovlp.a_rid;
+    b_rid = ovlp.b_rid;
+    a_bgn = ovlp.a_bgn >= 0 ? ovlp.a_bgn
+                            : 0;  // maybe we need to fix negative a_bgn
+    b_bgn = ovlp.b_bgn >= 0 ? ovlp.b_bgn : 0;
+    a_end = ovlp.a_end;
+    b_end = ovlp.b_end;
+    a_len = ovlp.a_len;
+    b_len = ovlp.b_len;
+    if (ovlp.b_rid == rid) {
+      SWAP(a_rid, b_rid);
+      SWAP(a_bgn, b_bgn);
+      SWAP(a_end, b_end);
+      SWAP(a_len, b_len);
+    }
+    seq_t *b_seq;
+    seq_t b_subseq;
+    hpc_seq_t *b_csubseq;
+    if (ovlp.b_strand == 0) {
+      b_seq = get_seq_from_db(seq_p, b_rid, rlmap, ORIGINAL);
     } else {
-      ovlp_rec_v = kh_value(ovlp_map, k); 
+      b_seq = get_seq_from_db(seq_p, b_rid, rlmap, REVERSED);
+    }
+    if (ovlp.b_strand == 1) {
+      SWAP(b_bgn, b_end);
+      b_bgn = b_len - b_bgn;
+      b_end = b_len - b_end;
+    }
+    char *s1 = calloc(b_end - b_bgn + 1, sizeof(char));
+
+    strncpy(s1, b_seq->s + b_bgn, b_end - b_bgn);
+    b_subseq.l = b_end - b_bgn;
+    b_subseq.m = b_subseq.l;
+    b_subseq.s = s1;
+    b_csubseq = hp_compress(&b_subseq);
+    if (b_csubseq->l < 100) {
+      free(s1);
+      free_hpc_seq(b_csubseq);
+      free_seq(b_seq);
+      continue;
+    };
+    fill_kmer_count(b_csubseq, kmer_count);
+
+    uint32_t m_bgn, m_end;
+    m_bgn = a_cseq->p[a_bgn];
+    m_end = a_cseq->p[a_end - 1];
+
+    ovlp_hpc_seq_t ovlp_seq;
+    ovlp_seq.m_bgn = m_bgn;
+    ovlp_seq.m_end = m_end;
+    ovlp_seq.ovlp = ovlp;
+    ovlp_seq.seq = b_csubseq;
+    kv_push(ovlp_hpc_seq_t, NULL, *ovlp_seqs, ovlp_seq);
+
+    for (uint32_t i = m_bgn; i < m_end; i++) {
+      cov[i] += 1;
     }
 
-    kv_push(ovlp_rec_t, NULL, *ovlp_rec_v, ovlp);
+    free_seq(b_seq);
+    free(s1);
   }
 }
 
 int main(int argc, char *argv[]) {
-  FILE *ovlp_file;
+  char *seqdb_prefix = NULL;
+  char *ovlp_file_path = NULL;
 
-  // char *seqdb_prefix = NULL;
-  // char *seqdb_file_path = NULL; 
+  FILE *ovlp_file;
   int fd;
   struct stat sb;
+  //char ovlp_file_path[8192];
+  char seq_idx_file_path[8192];
+  char seqdb_file_path[8291];
+  uint32_t total_chunk = 1, my_chunk = 1;
+  int c;
+  opterr = 0;
+  while ((c = getopt(argc, argv, "p:l:t:c:")) != -1) {
+    switch (c) {
+      case 'p':
+        seqdb_prefix = optarg;
+        break;
+      case 'l':
+        ovlp_file_path = optarg;
+        break;
+      case 't':
+        total_chunk = atoi(optarg);
+        break;
+      case 'c':
+        my_chunk = atoi(optarg);
+        break;
+      case '?':
+        if (optopt == 'p') {
+          fprintf(stderr,
+                  "Option -%c not specified, using 'seq_dataset' as the "
+                  "sequence db prefix\n",
+                  optopt);
+        }
+        if (optopt == 'l') {
+          fprintf(stderr,
+                  "Option -%c not specified, using 'preads.ovl' as the "
+                  "overlap file\n",
+                  optopt);
+        }
+        return 1;
+      default:
+        abort();
+    }
+  }
+
+  assert(total_chunk > 0);
+  assert(my_chunk > 0 && my_chunk <= total_chunk);
+ 
+   if (seqdb_prefix == NULL) {
+    seqdb_prefix = (char *)calloc(8192, 1);
+    snprintf(seqdb_prefix, 8191, "seq_dataset");
+  }
+
+  if (ovlp_file_path == NULL) {
+    ovlp_file_path = (char *)calloc(8192, 1);
+    snprintf(ovlp_file_path, 8191, "preads.ovl");
+  }
   
-  //fd = open(seqdb_file_path, O_RDONLY);
-  fd = open("../0-seqdb/seq_dataset.seqdb", O_RDONLY);
+  int written;
+  written = snprintf(seq_idx_file_path, sizeof(seq_idx_file_path), "%s.idx",
+                     seqdb_prefix);
+  assert(written < sizeof(seq_idx_file_path));
+  fprintf(stderr, "using index file: %s\n", seq_idx_file_path);
+  
+  written = snprintf(seqdb_file_path, sizeof(seqdb_file_path), "%s.seqdb",
+                     seqdb_prefix);
+  assert(written < sizeof(seqdb_file_path));
+  fprintf(stderr, "using seqdb file: %s\n", seqdb_file_path);
+  fprintf(stderr, "using overlap file: %s\n", ovlp_file_path);
+  
+  fd = open(seqdb_file_path, O_RDONLY);
   if (fd == -1) handle_error("open");
 
   if (fstat(fd, &sb) == -1) /* To obtain file size */
     handle_error("fstat");
 
-  ovlp_file = fopen("preads.ovl", "r");
+  khash_t(RLEN) * rlmap;
+  rlmap = get_read_length_map(seq_idx_file_path);
+
   khash_t(OVLP) * ovlp_map = kh_init(OVLP);
   ovlp_rec_v_t * ovlp_rec_v;
-  build_ovlp_map(ovlp_file, ovlp_map);
+  ovlp_file = fopen(ovlp_file_path, "r");
+  build_ovlp_map(ovlp_file, ovlp_map, total_chunk, my_chunk);
 
   uint8_t *seq_p;
-  khash_t(RLEN) * rlmap;
   seq_p = (uint8_t *)mmap((void *)0, sb.st_size, PROT_READ, MAP_SHARED, fd, 0);
   // rlmap = get_read_length_map(seq_idx_file_path);
-  rlmap = get_read_length_map("../0-seqdb/seq_dataset.idx");
   seq_t *a_seq;
   hpc_seq_t *a_cseq;
   for (khiter_t __i = kh_begin(ovlp_map); __i != kh_end(ovlp_map); ++__i) {
@@ -287,68 +433,9 @@ int main(int argc, char *argv[]) {
 
     uint32_t * cov;
     cov = calloc(a_cseq->l, sizeof(uint32_t));
-
-    for (size_t i=0; i < ovlp_rec_v->n; i++) {
-      ovlp_rec_t ovlp;
-      ovlp = ovlp_rec_v->a[i];
-      uint32_t a_rid, b_rid;
-      int32_t a_bgn, a_end;
-      int32_t b_bgn, b_end;
-      uint32_t a_len, b_len;
-      a_rid = ovlp.a_rid;
-      b_rid = ovlp.b_rid;
-      a_bgn = ovlp.a_bgn >= 0 ? ovlp.a_bgn : 0; //maybe we need to fix negative a_bgn
-      b_bgn = ovlp.b_bgn >= 0 ? ovlp.b_bgn : 0;
-      a_end = ovlp.a_end;
-      b_end = ovlp.b_end;
-      a_len = ovlp.a_len;
-      b_len = ovlp.b_len;
-      if (ovlp.b_rid == kh_key(ovlp_map, __i)) {
-        SWAP(a_rid, b_rid);
-        SWAP(a_bgn, b_bgn);
-        SWAP(a_end, b_end);
-        SWAP(a_len, b_len);
-      }
-      seq_t *b_seq;
-      seq_t b_subseq;
-      hpc_seq_t * b_csubseq;
-      if (ovlp.b_strand == 0) {
-        b_seq = get_seq_from_db(seq_p, b_rid, rlmap, ORIGINAL);
-      } else {
-        b_seq = get_seq_from_db(seq_p, b_rid, rlmap, REVERSED);
-      }
-      if (ovlp.b_strand == 1) {
-        SWAP(b_bgn, b_end);
-        b_bgn = b_len - b_bgn;
-        b_end = b_len - b_end;
-      }
-      char *s1 = calloc(b_end - b_bgn + 1, sizeof(char));
-      
-      strncpy(s1, b_seq->s + b_bgn, b_end - b_bgn);
-      b_subseq.l = b_end - b_bgn;
-      b_subseq.m = b_subseq.l;
-      b_subseq.s = s1;
-      b_csubseq = hp_compress(&b_subseq);
-      fill_kmer_count(b_csubseq, kmer_count);
-      
-      uint32_t m_bgn, m_end;
-      m_bgn = a_cseq->p[a_bgn];
-      m_end = a_cseq->p[a_end-1];
-      
-      ovlp_hpc_seq_t ovlp_seq;
-      ovlp_seq.m_bgn = m_bgn;
-      ovlp_seq.m_end = m_end;
-      ovlp_seq.ovlp = ovlp;
-      ovlp_seq.seq = b_csubseq;
-      kv_push(ovlp_hpc_seq_t, NULL, ovlp_seqs, ovlp_seq);
-
-      for (uint32_t i = m_bgn; i < m_end; i++) {
-        cov[i] += 1;
-      }
-
-      free_seq(b_seq);
-      free(s1);
-    }
+    get_all_kmer_count(rid, a_cseq,
+                       ovlp_rec_v, ovlp_map, seq_p, rlmap,
+                       cov, kmer_count, &ovlp_seqs);
 
     uint64_t kmer_int64 = 0;
     uint32_t count = 0;
