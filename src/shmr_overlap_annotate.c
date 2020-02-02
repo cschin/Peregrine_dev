@@ -296,7 +296,7 @@ void get_all_kmer_count(uint32_t rid, hpc_seq_t * a_cseq,
     b_subseq.m = b_subseq.l;
     b_subseq.s = s1;
     b_csubseq = hp_compress(&b_subseq);
-    if (b_csubseq->l < 100) {
+    if (b_csubseq->l < 48) {
       free(s1);
       free_hpc_seq(b_csubseq);
       free_seq(b_seq);
@@ -421,7 +421,10 @@ int main(int argc, char *argv[]) {
 
     uint32_t rid;
     rid = kh_key(ovlp_map, __i);
-
+    /* // useful for debugging
+    if (rid != 8321) {
+	    continue;
+    }*/
     khash_t(KMERCOUNT) *kmer_count = kh_init(KMERCOUNT);
 
     a_seq = get_seq_from_db(seq_p, rid, rlmap, ORIGINAL);
@@ -439,7 +442,6 @@ int main(int argc, char *argv[]) {
 
     uint64_t kmer_int64 = 0;
     uint32_t count = 0;
-    uint32_t total_markers = 0;
     marker_v_t markers;
     marker_t marker;
 
@@ -460,11 +462,10 @@ int main(int argc, char *argv[]) {
       assert(k != kh_end(kmer_count));
       count = kh_val(kmer_count, k);
 
-      if (count > 3 && (double) count / (double) cov[p] < 0.8) {
+      if (count > 4 && (cov[p] - count > 3 && (double) count / (double) (cov[p]+1) < 0.9)) {
         marker.kmer_uint64 = kmer_int64;
-        marker.pos = p;
+        marker.pos = p - KMERSIZE + 1;
         kv_push(marker_t, NULL, markers, marker);
-        total_markers += 1;
       } 
     }
 
@@ -481,6 +482,7 @@ int main(int argc, char *argv[]) {
       uint32_t m_bgn, m_end;
       m_bgn = ovlp_seqs.a[i].m_bgn;
       m_end = ovlp_seqs.a[i].m_end;
+      assert( m_bgn < m_end );
       for (size_t j=0; j < markers.n; j++) {
         marker_t m;
         khiter_t k;
@@ -498,6 +500,30 @@ int main(int argc, char *argv[]) {
              ovlp.a_strand, ovlp.a_bgn, ovlp.a_end, ovlp.a_len, ovlp.b_strand,
              ovlp.b_bgn, ovlp.b_end, ovlp.b_len, (char *)ovlp.ovlp_type, test_n,
              match_n, test_n - match_n, low_cov);
+
+      /* // useful for debugging
+      if (ovlp.a_rid == 8321  && ovlp.b_rid == 10473) {
+	      printf("XX: %d %d\n", a_seq->l, a_cseq->l);
+	      printf(" Y: %d %d\n",m_bgn, m_end);
+	      for (size_t j=0; j < markers.n; j++) {
+		      marker_t m;
+		      khiter_t k;
+		      m = markers.a[j];
+		      if (m.pos >= m_bgn && m.pos < m_end ) {
+			      printf(" X:%d %lu\n", m.pos, m.kmer_uint64);
+			      test_n += 1;
+			      k = kh_get(KMERCOUNT, seq_kmer_count, m.kmer_uint64);
+			      if (k != kh_end(seq_kmer_count)) {
+				      printf("X2:%d %lu\n", m.pos, m.kmer_uint64);
+				      match_n += 1;
+			      }
+		      }
+	      }
+	      for (size_t p = 0; p < a_cseq->l; p++) {
+		      printf("Z: %ld %d\n", p, cov[p]);
+	      }
+      } */
+
       kh_destroy(KMERCOUNT, seq_kmer_count);
       free_hpc_seq(ovlp_seqs.a[i].seq);
     }
