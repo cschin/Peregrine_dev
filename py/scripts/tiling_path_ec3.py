@@ -119,7 +119,10 @@ def stiching_reads(tiling_path_data, seqdb, ovlps):
 
         tiling_read_direction = 0 if int(e) > int(s) else 1
         for rr in ovlps[rid0]:
-            direction = ovlps[rid0][rr][-1]
+            _, _, s_, e_, direction = ovlps[rid0][rr]
+            if abs(s_-e_) < 4000:
+                continue
+            #direction = ovlps[rid0][rr][-1]
             supporting_seq_ids.add( (rr, tiling_read_direction, direction) ) 
 
         s0 = seqdb.index_data[rid0].offset 
@@ -249,8 +252,8 @@ if __name__ == "__main__":
 
     for ctg in tiling_path_data:
         chunks = []
-        for i in range(0, len(tiling_path_data[ctg]), 24):
-            chunk = tiling_path_data[ctg][i:i+24]
+        for i in range(0, len(tiling_path_data[ctg]), 32):
+            chunk = tiling_path_data[ctg][i:i+32]
             chunks.append(chunk)
 
         template_cns_segments = []
