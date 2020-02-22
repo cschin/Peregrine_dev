@@ -105,25 +105,27 @@ class StringGraph(object):
         for e in self.edges:
             self.e_reduce[e] = False
 
-    def bfs_nodes(self, n, exclude=None, depth=5):
-        all_nodes = set()
-        all_nodes.add(n)
-        candidate_nodes = set()
-        candidate_nodes.add(n)
-        dp = 1
+    def bfs_nodes(self, n, exclude=None, depth=3):
+        all_nodes = {}
+        all_nodes[n] = 0
+        candidate_nodes = [] 
+        candidate_nodes.append(n)
+        dp = 0
         while dp < depth and len(candidate_nodes) > 0:
-            v = candidate_nodes.pop()
+            v = candidate_nodes.pop(0)
             for e in v.out_edges:
                 w = e.out_node
                 if w == exclude:
                     continue
                 if w not in all_nodes:
-                    all_nodes.add(w)
+                    all_nodes[w] = all_nodes[v] + 1
+                    if all_nodes[w] > dp:
+                        dp = all_nodes[w]
                     if len(w.out_edges) > 0:
-                        candidate_nodes.add(w)
-            dp += 1
+                        candidate_nodes.append(w)
 
-        return all_nodes
+        return set(all_nodes.keys())
+    
 
     def mark_chimer_edges(self):
 
@@ -194,9 +196,73 @@ class StringGraph(object):
                     chimer_nodes.append(reverse_end(n.name))
 
         return chimer_nodes, chimer_edges
+   
+
+    def bfs_nodes_with_depth(self, n, exclude=None, depth=5, reduced_graph=True):
+        all_nodes = {}
+        all_nodes[n] = 0
+        candidate_nodes = []
+        candidate_nodes.append(n)
+        dp = 0
+        while dp < depth and len(candidate_nodes) > 0:
+
+            v = candidate_nodes.pop(0)
+            for e in v.out_edges:
+                if reduced_graph is True and \
+                   self.e_reduce[(e.in_node.name, e.out_node.name)] is True:
+                    continue
+                w = e.out_node
+                if w == exclude:
+                    continue
+                if w not in all_nodes:
+                    all_nodes[w] = all_nodes[v] + 1
+                    if all_nodes[w] > dp:
+                        dp = all_nodes[w]
+                    if reduced_graph:
+                        out_count = len(self.get_out_edges_for_node(w.name))
+                    else:
+                        out_count = len(w.out_edges)
+                    if out_count > 0:
+                        # print("at", v.name, "add", w.name)
+                        candidate_nodes.append(w)
+
+        return all_nodes
+    
+
+    def mark_dup_simple_edges(self):
+        # identify simple dup path
+        """
+             /*-*-*\
+           -*       *-
+             \--*--/  <-- mark single read bubble branch, mostly caused be sequencing errors
+        """
+        candidates = set()
+        for n in self.nodes:
+            in_edges = self.get_in_edges_for_node(n)
+            out_edges = self.get_out_edges_for_node(n)
+            if len(out_edges) != 1:
+                continue
+            if len(in_edges) != 1:
+                continue
+            v = in_edges[0].in_node
+            w = out_edges[0].out_node
+
+            if len(self.get_in_edges_for_node(w.name)) > 1 and \
+                    len(self.get_out_edges_for_node(v.name)) > 1:
+                candidates.add( (self.nodes[n], v, w) )
+        # print("dup edges:", len(candidates))
+        dup_edges = set()
+        for n, v, w in candidates:
+            bfsnodes = self.bfs_nodes_with_depth(v, exclude=n, depth=10)
+            # print(v.name, n.name, w.name, bfsnodes.get(w, 0))
+            if bfsnodes.get(w, 0) > 2:
+                print("mark dup", n.name)
+                dup_edges.add( (v.name, n.name) )
+                dup_edges.add( (n.name, w.name) )
+
+        return dup_edges
 
     def mark_spur_edge(self):
-
         removed_edges = set()
         for v in self.nodes:
             if len([e for e in self.nodes[v].out_edges if self.e_reduce[(e.in_node.name, e.out_node.name)] != True]) > 1:
@@ -413,7 +479,7 @@ class StringGraph(object):
 
         return removed_edges
 
-    def get_out_edges_for_node(self, name, mask=True):
+    def get_out_edges_for_node(self, name):
         rtn = []
         for e in self.nodes[name].out_edges:
             v = e.in_node
@@ -422,7 +488,7 @@ class StringGraph(object):
                 rtn.append(e)
         return rtn
 
-    def get_in_edges_for_node(self, name, mask=True):
+    def get_in_edges_for_node(self, name):
         rtn = []
         for e in self.nodes[name].in_edges:
             v = e.in_node
@@ -431,7 +497,7 @@ class StringGraph(object):
                 rtn.append(e)
         return rtn
 
-    def get_best_out_edge_for_node(self, name, mask=True):
+    def get_best_out_edge_for_node(self, name):
         rtn = []
         for e in self.nodes[name].out_edges:
             v = e.in_node
@@ -442,7 +508,7 @@ class StringGraph(object):
 
         return rtn[-1]
 
-    def get_best_in_edge_for_node(self, name, mask=True):
+    def get_best_in_edge_for_node(self, name):
         rtn = []
         for e in self.nodes[name].in_edges:
             v = e.in_node
@@ -870,6 +936,10 @@ def generate_string_graph(args):
 
     spur_edges.update(sg.mark_spur_edge())
 
+    dup_simple_edges = sg.mark_dup_simple_edges()
+    for v, w in dup_simple_edges:
+        sg.e_reduce[(v, w)] = True
+
     if DEBUG_LOG_LEVEL > 1:
         print(sum([1 for c in itervalues(sg.e_reduce) if c == False]))
 
@@ -896,8 +966,11 @@ def generate_string_graph(args):
             type_ = "R"
         elif (v, w) in spur_edges:
             type_ = "S"
+        elif (v, w) in dup_simple_edges:
+            type_ = "D"
         elif sg.e_reduce[(v, w)] == True:
             type_ = "TR"
+
 
         line = '%s %s %s %5d %5d %5d %5.2f %s' % (
             v, w, rid, sp, tp, score, identity, type_)
@@ -1247,6 +1320,9 @@ def remove_dup_simple_path(ug, u_edge_data):
             u_edge_data[(s, t, v)] = length, score, edges, "simple_dup"
     return ug2
 
+
+
+
 def construct_c_paths_from_utgs_subgraph(ug, u_edge_data):
     subGraphs = []
 
@@ -1289,7 +1365,7 @@ def construct_c_paths_from_utgs_subgraph(ug, u_edge_data):
         #print(all_shorest_paths[-1])
         if len(all_shorest_paths) >0 :
             #print(len(g), len(source_nodes), len(sink_nodes), all_shorest_paths[-1] )
-            if all_shorest_paths[-1][0]/(len(g)) < 0.8:
+            if all_shorest_paths[-1][0]/(len(g)) < 0.5:
                 continue
             the_path = nx.dijkstra_path(g, all_shorest_paths[-1][1], all_shorest_paths[-1][2])
             s = the_path[0]
