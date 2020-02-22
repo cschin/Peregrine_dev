@@ -33,7 +33,7 @@ python3 setup.py install
 popd
 
 conda install -c conda-forge -y pypy3.6
-conda install -c bioconda -y pysam
+conda install -c bioconda -y pysam ncls
 pushd py
 wget -q https://bootstrap.pypa.io/get-pip.py
 pypy3 get-pip.py
