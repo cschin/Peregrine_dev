@@ -1259,6 +1259,12 @@ def construct_c_paths_from_utgs_subgraph(ug, u_edge_data):
         for s, t, v in edges_to_remove:
             subG.remove_edge(s, t)
 
+        edges_to_remove = [ (s, t, v) for s, t, v in subG.edges(keys=True)
+                           if s.split(":")[0] == t.split(":")[0] ] # palindrome sequences
+
+        for s, t, v in edges_to_remove:
+            subG.remove_edge(s, t)
+
         nodes_to_remove = [_ for _ in nodes
                         if subG.out_degree(_) >= 2 and subG.in_degree(_) >= 2]
 
