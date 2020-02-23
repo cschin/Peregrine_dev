@@ -178,11 +178,11 @@ def run(improper_p_ctg, proper_a_ctg, seqdb_prefix, sg_edges_list_fn, utg_data_f
         for l in f:
             l = l.strip().split()
             s, v, t, type_, length, score, path_or_edges = l
-            if type_ not in ["compound", "simple", "contained"]:
+            if type_ not in ["compound", "simple", "contained", "spur:2"]:
                 continue
             length = int(length)
             score = int(score)
-            if type_ in ("simple", "contained"):
+            if type_ in ("simple", "spur:2", "contained"):
                 path_or_edges = path_or_edges.split("~")
             else:
                 path_or_edges = [tuple(e.split("~"))
@@ -219,6 +219,11 @@ def run(improper_p_ctg, proper_a_ctg, seqdb_prefix, sg_edges_list_fn, utg_data_f
                 total_score += score
                 total_length += length
                 if type_ == "simple":
+                    if len(one_path) != 0:
+                        one_path.extend(path_or_edges[1:])
+                    else:
+                        one_path.extend(path_or_edges)
+                if type_ == "spur:2":
                     if len(one_path) != 0:
                         one_path.extend(path_or_edges[1:])
                     else:
