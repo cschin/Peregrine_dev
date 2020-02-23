@@ -937,6 +937,7 @@ def generate_string_graph(args):
     spur_edges.update(sg.mark_spur_edge())
 
     dup_simple_edges = sg.mark_dup_simple_edges()
+
     for v, w in dup_simple_edges:
         sg.e_reduce[(v, w)] = True
 
@@ -1555,7 +1556,7 @@ def ovlp_to_graph(args):
                     path_or_edges = "~".join(path_or_edges)
                 print(s, v, t, type_, length, score, path_or_edges, file=f)
 
-    ug2 = identify_spurs(ug, u_edge_data, 150000)
+    ug2 = identify_spurs(ug, u_edge_data, 250000)
     ug2 = remove_dup_simple_path(ug2, u_edge_data)
 
     # phase 2, finding all "consistent" compound paths
@@ -1636,16 +1637,16 @@ def ovlp_to_graph(args):
     # contig construction from utgs
     c_paths = construct_c_paths_from_utgs(ug, u_edge_data, sg)
 
-    u_edge_data_pickle_file = open("u_edge_data.pickle","wb")
-    pickle.dump(u_edge_data, u_edge_data_pickle_file)
-    u_edge_data_pickle_file.close()
+    #u_edge_data_pickle_file = open("u_edge_data.pickle","wb")
+    #pickle.dump(u_edge_data, u_edge_data_pickle_file)
+    #u_edge_data_pickle_file.close()
 
-    cpath_pickle_file = open("ctg_path.pickle","wb")
-    pickle.dump(c_paths, cpath_pickle_file)
-    cpath_pickle_file.close()
+    #cpath_pickle_file = open("ctg_path.pickle","wb")
+    #pickle.dump(c_paths, cpath_pickle_file)
+    #cpath_pickle_file.close()
 
-    nx.write_gpickle(sg, "sg.pickle")
-    nx.write_gpickle(ug, "ug.pickle")
+    #nx.write_gpickle(sg, "sg.pickle")
+    #nx.write_gpickle(ug, "ug.pickle")
 
     free_edges = set()
     for s, t, v in ug.edges(keys=True):
@@ -1704,11 +1705,32 @@ def ovlp_to_graph(args):
             if e in free_edges:
                 free_edges.remove(e)
 
+
+    used_path = set()
+    for s, t, v in u_edge_data:
+        length, score, path_or_edges, type_ = u_edge_data[(s, t, v)]
+        if type_ == "spur:2" and length > 30000:
+            if (s, t, v) in used_path:
+                continue
+            print("%06dF-S" % ctg_id, "S", s + "~" + v + "~" + \
+                t, t, length, score, s + "~" + v + "~" + t, file=ctg_paths)
+            used_path.add( (s, t, v) )
+            s = reverse_end(s)
+            t = reverse_end(t)
+            v = reverse_end(v)
+            s, t = t, s
+            length, score, path_or_edges, type_ = u_edge_data[(s, t, v)]
+            print("%06dR-S" % ctg_id, "S", s + "~" + v + "~" + \
+                t, t, length, score, s + "~" + v + "~" + t, file=ctg_paths)
+            used_path.add( (s, t, v) )
+            ctg_id +=1
+
     for s, t, v in list(circular_path):
         length, score, path, type_ = u_edge_data[(s, t, v)]
         print("%6d" % ctg_id, "ctg_circular", s + \
             "~" + v + "~" + t, t, length, score, s + "~" + v + "~" + t, file=ctg_paths)
         ctg_id += 1
+
 
     ctg_paths.close()
 
