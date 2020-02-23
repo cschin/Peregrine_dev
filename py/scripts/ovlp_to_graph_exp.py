@@ -1279,12 +1279,15 @@ def identify_spurs(ug, u_edge_data, spur_len):
                     rs = reverse_end(t)
                     rt = reverse_end(s)
                     rv = reverse_end(v)
+                    r_edges = []
+                    for e in edges[::-1]:
+                        r_edges.append(reverse_end(e))
                     try:
                         ug2.remove_edge(s, t, key=v)
                         ug2.remove_edge(rs, rt, key=rv)
                         u_edge_data[(s, t, v)] = length, score, edges, "spur:2"
                         u_edge_data[(rs, rt, rv)
-                                    ] = length, score, edges, "spur:2"
+                                    ] = length, score, r_edges, "spur:2"
                     except Exception:
                         pass
 
@@ -1620,7 +1623,7 @@ def ovlp_to_graph(args):
     ug = ug2
 
     # Repeat the aggresive spur filtering with slightly larger spur length.
-    ug2 = identify_spurs(ug, u_edge_data, 150000)
+    ug2 = identify_spurs(ug, u_edge_data, 250000)
     ug = ug2
 
     with open("utg_data", "w") as f:
