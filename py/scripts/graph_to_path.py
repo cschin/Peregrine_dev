@@ -315,17 +315,22 @@ def run(improper_p_ctg, proper_a_ctg, seqdb_prefix, sg_edges_list_fn, utg_data_f
                                         a_total_score, atig_path_edges,
                                         a_ctg_id, a_edge_lines,
                                         delta_len, idt, cov))
-
+                flag = False
                 for data in atig_output:
                     (v, w, tig_path, a_total_length, a_total_score,
                      tig_path_edges, a_ctg_id, a_edge_lines,
                      delta_len, a_idt, cov) = data
+                    
+                    if len(a_edge_lines) < 4:
+                        continue
 
                     # Write out the tiling path.
                     a_ctg_t_out.write('\n'.join(a_edge_lines))
                     a_ctg_t_out.write('\n')
-
-                a_id += 1
+                    flag = True
+                    
+                if flag:
+                    a_id += 1
 
     a_ctg_t_out.close()
     p_ctg_t_out.close()
