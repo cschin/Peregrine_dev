@@ -258,7 +258,9 @@ class StringGraph(object):
             if bfsnodes.get(w, 0) > 2:
                 print("mark dup", n.name)
                 dup_edges.add( (v.name, n.name) )
+                dup_edges.add( (reverse_end(n.name), reverse_end(v.name)) )
                 dup_edges.add( (n.name, w.name) )
+                dup_edges.add( (reverse_end(w.name), reverse_end(n.name)) )
 
         return dup_edges
 
@@ -1280,8 +1282,18 @@ def identify_spurs(ug, u_edge_data, spur_len):
                     rt = reverse_end(s)
                     rv = reverse_end(v)
                     r_edges = []
-                    for e in edges[::-1]:
-                        r_edges.append(reverse_end(e))
+                    if type(edges) is list:
+                        for e in edges[::-1]:
+                            if type(e) is str:
+                                r_edges.append(reverse_end(e))
+                            else:
+                                r_edges.append( (reverse_end(e[2]), reverse_end(e[1]), reverse_end(e[0]) ) )
+                    else:
+                        for e in edges:
+                            if type(e) is str:
+                                r_edges.append(reverse_end(e))
+                            else:
+                                r_edges.append( (reverse_end(e[2]), reverse_end(e[1]), reverse_end(e[0]) ) )
                     try:
                         ug2.remove_edge(s, t, key=v)
                         ug2.remove_edge(rs, rt, key=rv)
