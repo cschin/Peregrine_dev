@@ -1287,19 +1287,18 @@ def identify_spurs(ug, u_edge_data, spur_len):
                             if type(e) is str:
                                 r_edges.append(reverse_end(e))
                             else:
-                                r_edges.append( (reverse_end(e[2]), reverse_end(e[1]), reverse_end(e[0]) ) )
+                                r_edges.append( (reverse_end(e[1]), reverse_end(e[0]), reverse_end(e[2]) ) )
                     else:
                         for e in edges:
                             if type(e) is str:
                                 r_edges.append(reverse_end(e))
                             else:
-                                r_edges.append( (reverse_end(e[2]), reverse_end(e[1]), reverse_end(e[0]) ) )
+                                r_edges.append( (reverse_end(e[1]), reverse_end(e[0]), reverse_end(e[2]) ) )
                     try:
                         ug2.remove_edge(s, t, key=v)
                         ug2.remove_edge(rs, rt, key=rv)
                         u_edge_data[(s, t, v)] = length, score, edges, "spur:2"
-                        u_edge_data[(rs, rt, rv)
-                                    ] = length, score, r_edges, "spur:2"
+                        u_edge_data[(rs, rt, rv)] = length, score, r_edges, "spur:2"
                     except Exception:
                         pass
 

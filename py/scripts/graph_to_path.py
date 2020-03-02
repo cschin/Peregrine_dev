@@ -182,9 +182,16 @@ def run(improper_p_ctg, proper_a_ctg, seqdb_prefix, sg_edges_list_fn, utg_data_f
                 continue
             length = int(length)
             score = int(score)
-            if type_ in ("simple", "spur:2", "contained"):
+            spur_simple = None
+            if type_ == "spur:2":
+                if v == "NA":
+                    spur_simple = False
+                else:
+                    spur_simple = True
+
+            if type_ in ("simple", "contained") or spur_simple is True:
                 path_or_edges = path_or_edges.split("~")
-            else:
+            elif type_ in ("compound") or spur_simple is False:
                 path_or_edges = [tuple(e.split("~"))
                                  for e in path_or_edges.split("|")]
             utg_data[(s, v, t)] = type_, length, score, path_or_edges
@@ -218,21 +225,23 @@ def run(improper_p_ctg, proper_a_ctg, seqdb_prefix, sg_edges_list_fn, utg_data_f
                 type_, length, score, path_or_edges = utg_data[(s, v, t)]
                 total_score += score
                 total_length += length
-                if type_ == "simple":
-                    if len(one_path) != 0:
-                        one_path.extend(path_or_edges[1:])
-                    else:
-                        one_path.extend(path_or_edges)
+                spur_simple = None
                 if type_ == "spur:2":
+                    if v != "NA":
+                        spur_simple = True
+                    else:
+                        spur_simple = False
+                if type_ == "simple" or spur_simple is True:
                     if len(one_path) != 0:
                         one_path.extend(path_or_edges[1:])
                     else:
                         one_path.extend(path_or_edges)
-                if type_ == "compound":
+                if type_ == "compound" or spur_simple is False:
 
                     c_graph = nx.DiGraph()
 
                     all_alt_path = []
+                    print(s,v,t,path_or_edges[0:2])
                     for ss, vv, tt in path_or_edges:
                         type_, length, score, sub_path = utg_data[(ss, vv, tt)]
 
