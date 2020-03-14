@@ -1388,7 +1388,12 @@ def construct_c_paths_from_utgs_subgraph(ug, u_edge_data):
             c_path = []
             path_length = 0
             path_score = 0
+            sym_dup = False
             for t in the_path[1:]:
+                ss, tt = reverse_end(t), reverse_end(s)
+                if (ss, tt) in edges_to_remove:
+                    sym_dup = True
+                    break
                 for v in g[s][t]:
                     length, score, path_or_edges, type_ = u_edge_data[(s, t, v)]
                     c_path.append((s,t,v))
@@ -1397,8 +1402,9 @@ def construct_c_paths_from_utgs_subgraph(ug, u_edge_data):
                     break # we only need one of the multi-edges
                 edges_to_remove.add((s,t))
                 s = t
-            c_paths.append((the_path[0], the_path[1], the_path[-1],
-                        path_length, path_score, c_path, len(c_path)))
+            if not sym_dup:
+                c_paths.append((the_path[0], the_path[1], the_path[-1],
+                            path_length, path_score, c_path, len(c_path)))
 
     return c_paths, edges_to_remove
 
