@@ -295,6 +295,8 @@ def run(improper_p_ctg, proper_a_ctg, seqdb_prefix, sg_edges_list_fn, utg_data_f
                 edge_data, ctg_id, one_path_edges, (not improper_p_ctg))
 
             # Write out the tiling path.
+            if len(p_edge_lines) < 5:
+                continue
             p_ctg_t_out.write('\n'.join(p_edge_lines))
             p_ctg_t_out.write('\n')
 
@@ -330,7 +332,7 @@ def run(improper_p_ctg, proper_a_ctg, seqdb_prefix, sg_edges_list_fn, utg_data_f
                      tig_path_edges, a_ctg_id, a_edge_lines,
                      delta_len, a_idt, cov) = data
                     
-                    if len(a_edge_lines) < 4:
+                    if len(a_edge_lines) < 5:
                         continue
 
                     # Write out the tiling path.
