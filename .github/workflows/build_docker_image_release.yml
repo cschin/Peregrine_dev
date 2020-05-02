@@ -14,7 +14,7 @@ jobs:
 
     - name: build docker
       shell: bash
-      run: bash build_docker.sh tag
+      run: bash build_docker_dev.sh tag
 
     - name: test assembling E. coli
       if: success()

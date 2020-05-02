@@ -16,7 +16,7 @@ jobs:
 
     - name: build docker for the master branch
       shell: bash
-      run: bash build_docker.sh master
+      run: bash build_docker_dev.sh master
 
     - name: test assembling E. coli
       if: success()
