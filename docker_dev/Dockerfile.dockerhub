@@ -10,7 +10,7 @@ COPY falcon/ /opt/build/falcon/
 COPY py/ /opt/build/py/
 COPY ksw2/ /opt/build/ksw2/
 RUN cd /opt/build; bash install_with_conda.sh
-RUN . /opt/conda/bin/activate; conda clean -all
+RUN . /opt/conda/bin/activate; conda clean --all
 RUN apt-get update
 RUN apt-get install -y parallel time
 RUN . /opt/conda/bin/activate; conda activate peregrine;

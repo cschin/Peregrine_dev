@@ -6,7 +6,7 @@ RUN mkdir /opt/build
 COPY src.tgz /opt/build
 COPY install_with_conda.sh /opt/build
 RUN cd /opt/build; tar zxvf src.tgz; bash install_with_conda.sh
-RUN . /opt/conda/bin/activate; conda clean -all
+RUN . /opt/conda/bin/activate; conda clean --all
 RUN apt-get update
 RUN apt-get install -y parallel time
 RUN . /opt/conda/bin/activate; conda activate peregrine;
