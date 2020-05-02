@@ -2,7 +2,12 @@
 
 # Peregrine & SHIMMER Genome Assembly Toolkit
 
-+[![Github Actions](https://github.com/cschin/Peregrine_dev/workflows/build/badge.svg)](https://github.com/cschin/Peregrine_dev/actions)
+[![Github Actions](https://github.com/cschin/Peregrine_dev/workflows/build/badge.svg)](https://github.com/cschin/Peregrine_dev/actions)
+
+[![Actions Status](https://github.com/cschin/Peregrine_dev/workflows/build-and-test-docker-image-master-branch/badge.svg)](https://github.com/cschin/peregrine/actions)
+
+[![Actions Status](https://github.com/cschin/Peregrine_dev/workflows/build-and-test-docker-image-tagged-release/badge.svg)](https://github.com/cschin/peregrine/actions)
+
 
 Peregrine is a fast genome assembler for accurate long reads (length > 10kb,
 accuraccy > 99%). It can assemble a human genome from 30x reads within 20 cpu
