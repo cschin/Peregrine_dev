@@ -12,7 +12,7 @@ popd
 tar czvf src.tgz src/ ksw2/ falcon/ py/ .git/
 mv src.tgz docker_dev/
 
-pushd docker/
+pushd docker_dev/
 if [ $1 == 'tag' ] 
 then
     tag=$(git describe --always --abbrev=0 --tags)
@@ -21,7 +21,7 @@ else
     tag=latest
 fi
 echo current docker tag: ${tag}
-docker build . --tag cschin/peregrine:${tag}
+docker build . --tag cschin/peregrine_dev:${tag}
 popd
 
 
