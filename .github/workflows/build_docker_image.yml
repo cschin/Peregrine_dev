@@ -1,0 +1,40 @@
+name: build-and-test-docker-image-master-branch
+
+on:
+  push:
+    branches: [ master ]
+
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: build docker for the master branch
+      shell: bash
+      run: bash build_docker.sh master
+
+    - name: test assembling E. coli
+      if: success()
+      shell: bash
+      run: |
+        mkdir -p $HOME/wd  
+        docker run -v ${GITHUB_WORKSPACE}/wd:/wd --entrypoint=/opt/test/run_test.sh cschin/peregrine_dev:latest
+        ls ${GITHUB_WORKSPACE}/wd/ecoli_test_results/
+
+    - uses: actions/upload-artifact@v2
+      if: success()
+      with:
+        name: E. coli dnadiff results
+        path: wd/ecoli_test_results/out.report
+   
+    - name: push image to docker hub
+      if: ${{ success() &&  github.event_name == 'push' }}
+      run: |
+        echo '${{ secrets.docker_password }}' | docker login --username '${{ secrets.docker_user }}'  --password-stdin
+        docker push cschin/peregrine_dev:latest
+
