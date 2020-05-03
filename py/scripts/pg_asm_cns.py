@@ -2,11 +2,13 @@
 
 import mmap
 import sys
+import re
+from collections import OrderedDict
 from peregrine._falcon4py import ffi
 from peregrine._falcon4py import lib as falcon
 from peregrine._shimmer4py import lib as shimmer
-import numpy as np
-from collections import OrderedDict
+
+low_coverage_m = re.compile(rb"[acgt]+")
 
 ## No option parsing at thie moment, perhaps letter
 
@@ -232,7 +234,7 @@ for ctg in contig_to_read_map:
         aln_cov = aln_base/ref_len
         print(f"aln_count:{aln_count}, aln_base: {aln_base}, aln_cov: {aln_cov}", file=sys.stderr)
 
-        if aln_base/ref_len < 3:
+        if aln_base/ref_len < 5:
             cns_seq = ffi.string(ref_seq)
             cns_seq = cns_seq.lower()
         else:
@@ -269,6 +271,15 @@ for ctg in contig_to_read_map:
         falcon.free_alignment(aln)
 
     contig = b"".join(stiched_segments)
-    print(">{}".format(ref_idx[ctg]["name"]))
-    print(contig.decode("ascii"))
+    low_cov_count = 0
+    for m in low_coverage_m.finditer(contig):
+        s_pos, e_pos = m.span()
+        low_cov_count += e_pos - s_pos
+
+    # we might want to collect low coverage consensus in a different file
+    # in the future
+    if 1.0 * low_cov_count/len(contig) < 0.5:
+        print(">{}".format(ref_idx[ctg]["name"]))
+        print(contig.decode("ascii"))
+
 ffi.release(rng)

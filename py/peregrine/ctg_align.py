@@ -4,8 +4,11 @@ from .utils import get_cigar
 from .utils import get_shimmer_alns_from_seqs
 from ._falcon4py import lib as falcon
 import vcfpy
-from intervaltree import IntervalTree
 from collections import Counter
+import numpy as np
+from ncls import NCLS
+from intervaltree import IntervalTree
+
 # from ._falcon4py import ffi
 # from intervaltree import Interval, IntervalTree
 
@@ -50,7 +53,8 @@ class SeqDBAligner(object):
              "max_diff": 1000,
              "max_dist": 15000,
              "max_repeat": 1}
-        self.map_itrees = None
+        self.interval_map = None
+        self.map_data = None
 
     def _get_vcf_from_cigar(self, seq0, seq1, sname0, sname1, bgn0, bgn1,
                             rpos, qpos, cigars):
@@ -204,17 +208,29 @@ class SeqDBAligner(object):
         return vcf_records, ctg_direction
 
     def load_map_file(self, map_file_path):
-        self.map_itrees = {}
+        self.interval_map = {}
+        self.map_data = []
+        _interval_map = {}
         with open(map_file_path) as f:
+            idx = 0
             for row in f:
                 row = row.strip().split()
                 (ref_id, ref_bgn, ref_end,
                     ctg_id, ctg_bgn, ctg_end,
                     ctg_direction, mcount0, mcount1) = [int(_) for _ in row]
-                self.map_itrees.setdefault(ref_id, IntervalTree())
-                self.map_itrees[ref_id][ref_bgn:ref_end] = \
-                    (ctg_id, ctg_bgn, ctg_end,
-                     ctg_direction, mcount0, mcount1)
+                _interval_map.setdefault(ref_id, [[], [], []])
+                self.map_data.append((ref_id, ref_bgn, ref_end,
+                                      ctg_id, ctg_bgn, ctg_end,
+                                      ctg_direction, mcount0, mcount1))
+                _interval_map[ref_id][0].append(ref_bgn)
+                _interval_map[ref_id][1].append(ref_end)
+                _interval_map[ref_id][2].append(idx)
+                idx += 1
+        for ref_id in _interval_map:
+            bgns, ends, idx = _interval_map[ref_id]
+            self.interval_map[ref_id] = NCLS(np.array(bgns),
+                                             np.array(ends),
+                                             np.array(idx))
 
     def _generate_interval_candidate(self, shimmer_alns,
                                      seq0, seq1,
@@ -263,14 +279,15 @@ class SeqDBAligner(object):
 
     def get_target_itree(self, intervals, sid=0, padding=5000):
         target_itrees = {}
-        for interval in sorted(intervals):
-            (ctg_id, ctg_bgn, ctg_end,
-                ctg_direction, mcount0, mcount1) = interval.data
+        for _, _, itvl_idx in intervals:
+            (ref_id, ref_bgn, ref_end,
+                ctg_id, ctg_bgn, ctg_end,
+                ctg_direction, mcount0, mcount1) = self.map_data[itvl_idx]
             target_itrees.setdefault(ctg_id, IntervalTree())
             b = ctg_bgn - padding
             e = ctg_bgn + padding
             target_itrees[ctg_id][b:e] = \
-                (sid, ctg_direction, interval.begin, interval.end)
+                (sid, ctg_direction, ref_bgn, ref_end)
         for t_id in target_itrees:
             target_itrees[t_id].merge_overlaps(
                 data_reducer=lambda x, y: x+[y[1]],
@@ -279,7 +296,8 @@ class SeqDBAligner(object):
         return target_itrees
 
     def get_target_itree_from_ref_id(self, sid, s, e, padding=5000):
-        return self.get_target_itree(self.map_itrees[sid][s:e],
+        intervals = self.interval_map[sid].find_overlap(s, e)
+        return self.get_target_itree(intervals,
                                      sid=sid, padding=padding)
 
     def map_small_interval(self, seq0_info, padding=5000,
@@ -289,7 +307,6 @@ class SeqDBAligner(object):
         sname0:bgn0-bgn1
         bgn1 - bgn0 should be less than 250000 for now
         """
-        assert self.map_itrees is not None
         sname0, bgn0, end0 = seq0_info
         assert end0 - bgn0 > 0
         assert end0 - bgn0 < max_interval_size
@@ -303,8 +320,9 @@ class SeqDBAligner(object):
             end0_ = self.sdb0.index_data[sid].length
         seq0 = self.sdb0.get_subseq_by_rid(sid, bgn0_, end0_)
 
+        intervals = self.interval_map[sid].find_overlap(bgn0_, end0_)
         target_itrees = self.get_target_itree(
-                                self.map_itrees[sid][bgn0_:end0_],
+                                intervals,
                                 sid, padding)
 
         candidates = []
