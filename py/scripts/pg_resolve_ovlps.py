@@ -15,6 +15,7 @@ each other either from different haplotypes or duplications.
 Usage:
   pg_resolve_ovlps.py resolve <read_db_prefix> <ovlp_file>
                               <ovlp_ann_nchunk> <ovlp_ann_nproc>
+                              <cns_nchunk> <cns_nproc>
                               --workdir <workdir>
                               [--min_len <min_len>]
                               [--min_idt <min_idt>]
@@ -113,12 +114,28 @@ cat {params.ovlps} > preads-ann.ovl
 
 cat preads-ann.ovl | awk '$NF == 1 {{print $1}}' | sort -u > filtered_out_reads
 filter_ovlp.py > preads-rr.ovl
-cp preads-ann.ovl preads-rr.ovl; echo "-" >> preads-rr.ovl
+rm preads-ann.ovl
 /usr/bin/time ovlp_to_graph.py  --overlap-file preads-rr.ovl --min_len {params.min_len} \
     --min_idt {params.min_idt} >& asm.log
 /usr/bin/time graph_to_path.py >& to_path.log
 /usr/bin/time path_to_contig.py {params.read_db_prefix} \
-    p_ctg_tiling_path > {output.p_ctg} 2> to_contig.log
+    p_ctg_tiling_path > {output.p_ctg} 2> to_contig.loga \
+
+
+# TODO, change these parts using 'parallel' quikc hacks to use proper pypeflow tasks
+
+mkdir -p cns_log
+for i in `seq 1 {params.cns_nchunk}`; do 
+   echo "/usr/bin/time tiling_path_ec.py {params.read_db_prefix} p_ctg_tiling_path preads-rr.ovl {params.cns_nchunk} $i  > p_cns_part_$i.fa 2> cns_log/log.p_cns.$i"; 
+done | parallel -j {params.cns_nproc}
+cat p_cns_part_*.fa > p_ctg_cns.fa
+# rm p_cns_part_*.fa
+
+for i in `seq 1 {params.cns_nchunk}`; do 
+   echo "/usr/bin/time tiling_path_ec.py {params.read_db_prefix} a_ctg_tiling_path preads-rr.ovl {params.cns_nchunk} $i  > a_cns_part_$i.fa 2> cns_log/log.a_cns.$i"; 
+done | parallel -j {params.cns_nproc}
+cat a_cns_part_*.fa > a_ctg_cns.fa
+# rm a_cns_part_*.fa
 """
     asm_dir = os.path.join(os.path.abspath(args["--workdir"]), "3-asm-rr")
     ovlps_list = " ".join(sorted([v for v in ovlps.values()]))
@@ -135,7 +152,9 @@ cp preads-ann.ovl preads-rr.ovl; echo "-" >> preads-rr.ovl
             'read_db_prefix': read_db_abs_prefix,
             'ovlps': ovlps_list,
             'min_len': int(args["--min_len"]),
-            'min_idt': int(args["--min_idt"])
+            'min_idt': int(args["--min_idt"]),
+            'cns_nchunk': int(args["<cns_nchunk>"]),
+            'cns_nproc': int(args["<cns_nchunk>"])
         },
         dist=Dist(NPROC=1, local=True)
     ))
