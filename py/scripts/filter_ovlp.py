@@ -5,7 +5,7 @@ with open("filtered_out_reads") as f:
         r = r.strip()
         #reads.add(r)
 phasable_reads = set()
-fn = "preads-ann.ovl":
+fn = "preads-ann.ovl"
 with open(fn) as f:
     for r in f:
         r = r.strip().split()
@@ -26,7 +26,7 @@ with open("phasable_reads", "w") as f:
 
 unphased_reads = set()
 
-fn ="preads-ann.ovl":
+fn ="preads-ann.ovl"
 with open(fn) as f:
     for r in f:
         r = r.strip().split()
