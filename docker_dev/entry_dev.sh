@@ -1,4 +1,9 @@
 #!/bin/bash
 . /opt/conda/etc/profile.d/conda.sh
 conda activate peregrine
-pg_run_dev.py $@
+if [ $1 == "test" ]; then 
+  cd /opt/test
+  bash /opt/test/run_test.sh
+else  
+  pg_run_dev.py $@
+fi
