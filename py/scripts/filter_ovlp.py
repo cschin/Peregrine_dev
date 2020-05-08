@@ -3,7 +3,8 @@ reads = set()
 with open("filtered_out_reads") as f:
     for r in f:
         r = r.strip()
-        #reads.add(r)
+        reads.add(r)
+
 phasable_reads = set()
 fn = "preads-ann.ovl"
 with open(fn) as f:
@@ -15,7 +16,7 @@ with open(fn) as f:
             continue
         d = int(r[13])
         n = int(r[14])
-        if d ==0 or 1.0*n/d > 0.96:
+        if d ==0 or 1.0*n/d > 0.99:
             print(" ".join(r))
             phasable_reads.add(r[0])
             phasable_reads.add(r[1])

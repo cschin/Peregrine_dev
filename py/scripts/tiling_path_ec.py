@@ -12,12 +12,13 @@ from peregrine.utils import SequenceDatabase
 from peregrine.utils import get_shimmers_from_seq
 from peregrine.utils import get_shimmer_alns
 from peregrine.utils import get_tag_from_seqs
-#from peregrine.utils import get_shimmer_match_offset
+from peregrine.utils import get_shimmer_match_offset
 from peregrine.utils import get_shimmer_alns_from_seqs
 #from peregrine._shimmer4py import ffi, lib
 
 basemap = {1:"A",2:"C",4:"G",8:"T"}
 stitching_overhang_size = 500
+
 
 def get_cns(template_seq, supporting_reads, max_dist = 128, min_cov=1):
 
@@ -35,21 +36,27 @@ def get_cns(template_seq, supporting_reads, max_dist = 128, min_cov=1):
         if tag is not None:
             tags[aln_count] = tag
             aln_count += 1
+        else:
+            print("NO TAG:", rid, file=sys.stderr, flush=True)
 
     print("start generating cns", "aln_count:", aln_count, file=sys.stderr, flush=True)
     cns = falcon4py.get_cns_from_align_tags(tags,
                                             aln_count,
                                             len(seq0),
                                             min_cov)
+    cns_seq = falcon_ffi.string(cns.sequence)
+    # print(">template {}".format(len(template_seq)), file=sys.stderr, flush=True)
+    # print(">cns      {}".format(len(cns_seq)), file=sys.stderr, flush=True)
+    # print(">template {}".format(template_seq.decode()), file=sys.stderr, flush=True)
+    # print(">cns      {}".format(cns_seq.decode()), file=sys.stderr, flush=True)
     print("finish generating cns", file=sys.stderr, flush=True)
 
-    cns_seq = falcon_ffi.string(cns.sequence)
     falcon4py.free_consensus_data(cns)
     for i in range(aln_count):
         falcon4py.free_align_tags(tags[i])
     falcon_ffi.release(tags)
 
-    return cns_seq
+    return cns_seq.upper()
 
 def get_offset(template_mmers, read_seq, l, w, k):
     mmers = shimmer_ffi.new("mm128_v *")
@@ -69,7 +76,7 @@ def get_offset(template_mmers, read_seq, l, w, k):
         if aln.a[idx].idx0.n > max_chain_n:
             max_chain_n = aln.a[idx].idx0.n
             max_chain_idx = idx
-    idx0 = aln.a[max_chain_idx].idx0.a[0] 
+    idx0 = aln.a[max_chain_idx].idx0.a[0]
     idx1 = aln.a[max_chain_idx].idx1.a[0]
     y = template_mmers.a[idx0].y
     template_pos_end = ((y & 0xFFFFFFFF) >> 1) + 1
@@ -85,10 +92,14 @@ def stiching_reads(tiling_path_data, seqdb, ovlps):
     segments = []
     # I don't like to have the first read as it breaks the string formulation,
     # but poeple like it for no reason, so I will just do it
+
+
+    supporting_seq_ids = set()
     ctg_id, v, w, r, s, e, olen, idt, _1, _2 = tiling_path_data[0]
+    print("start stiching, ctg:", ctg_id, file=sys.stderr, flush=True)
     v = v.split(":")
     rid0 = int(v[0])
-    s0 = seqdb.index_data[rid0].offset 
+    s0 = seqdb.index_data[rid0].offset
     slen0 = seqdb.index_data[rid0].length
     e0 = s0 + slen0
     bseq0 = seqdb.seqdb[s0:e0]
@@ -102,9 +113,16 @@ def stiching_reads(tiling_path_data, seqdb, ovlps):
 
     ctg_len = len(seq)
     segments.append((ctg_len, 0, seq))
-    print("start stiching, ctg:", ctg_id, file=sys.stderr, flush=True)
 
-    supporting_seq_ids = set()
+    tiling_read_direction = 0 if strand0 == 0 else 1
+    for rr in ovlps[rid0]:
+        _, _, s_, e_, direction = ovlps[rid0][rr]
+        # if abs(s_-e_) < 4000:  #filtering short overlap, not a good idea when coverage is limited
+        #     continue
+        if tiling_read_direction == 1:
+            direction = 1 - direction
+        supporting_seq_ids.add( (rr, direction) )
+
     for row in tiling_path_data:
         print(" ".join(row), file=sys.stderr, flush=True)
         ctg_id, v, w, r, s, e, olen, idt, _1, _2 = row
@@ -115,8 +133,8 @@ def stiching_reads(tiling_path_data, seqdb, ovlps):
         olen = int(olen)
         idt = float(idt)
 
-        rid0 = int(w[0])
 
+        rid0 = int(w[0])
         tiling_read_direction = 0 if int(e) > int(s) else 1
         for rr in ovlps[rid0]:
             _, _, s_, e_, direction = ovlps[rid0][rr]
@@ -124,16 +142,16 @@ def stiching_reads(tiling_path_data, seqdb, ovlps):
             #     continue
             if tiling_read_direction == 1:
                 direction = 1 - direction
-            supporting_seq_ids.add( (rr, direction) ) 
+            supporting_seq_ids.add( (rr, direction) )
 
-        s0 = seqdb.index_data[rid0].offset 
+        s0 = seqdb.index_data[rid0].offset
         slen0 = seqdb.index_data[rid0].length
         e0 = s0 + slen0
         bseq0 = seqdb.seqdb[s0:e0]
         strand0 = 0 if v[1] == "E" else 1
 
         rid1 = int(w[0])
-        s1 = seqdb.index_data[rid1].offset 
+        s1 = seqdb.index_data[rid1].offset
         slen1 = seqdb.index_data[rid1].length
         e1 = s1 + slen1
         bseq1 = seqdb.seqdb[s1:e1]
@@ -178,7 +196,7 @@ def stiching_reads(tiling_path_data, seqdb, ovlps):
 
 def get_ovlps(overlap_data_fn, tiling_reads):
     ovlps = {}
-    with open(overlap_data_fn) as f: 
+    with open(overlap_data_fn) as f:
         for r in f:
             r = r.strip().split()
             if r[0] == "-":
@@ -186,7 +204,7 @@ def get_ovlps(overlap_data_fn, tiling_reads):
             id1, id2 = r[:2]
             id1 = int(id1)
             id2 = int(id2)
-            
+
             if id1 in tiling_reads:
                 ref_s = int(r[5])
                 ref_e = int(r[6])
@@ -221,7 +239,7 @@ def get_tiling_reads(tiling_path_fn, total_chunk, my_chunk):
         for row in f:
             row = row.strip().split()
             ctg = row[0]
-            ctg_hash = int(ctg[:6]) 
+            ctg_hash = int(ctg[:6])
             if ctg_hash % total_chunk != my_chunk % total_chunk:
                 continue
             tiling_path_data.setdefault(row[0], [])
@@ -246,10 +264,10 @@ if __name__ == "__main__":
 
 
     # tiling_reads = set()
-    tiling_reads, tiling_path_data = get_tiling_reads(tiling_path_fn, 
-            total_chunk, 
+    tiling_reads, tiling_path_data = get_tiling_reads(tiling_path_fn,
+            total_chunk,
             my_chunk)
-    
+
     ovlps = get_ovlps(overlap_data_fn, tiling_reads)
     # ovlps = {}
 
@@ -260,10 +278,10 @@ if __name__ == "__main__":
             chunks.append(chunk)
 
         template_cns_segments = []
-      
+
         for chunk in chunks:
             template_seq, supporting_seq_ids = stiching_reads(chunk, seqdb, ovlps)
-            print(ctg, "T:", len(template_seq), 
+            print(ctg, "T:", len(template_seq),
                     len(supporting_seq_ids), file=sys.stderr, flush=True)
 
             c_null = shimmer_ffi.NULL
@@ -272,22 +290,21 @@ if __name__ == "__main__":
             template_mmers = shimmer_ffi.new("mm128_v *")
 
             print("sketch start", file=sys.stderr, flush=True)
-            shimmer4py.mm_sketch(c_null, template_seq, 
+            shimmer4py.mm_sketch(c_null, template_seq,
                     len(template_seq), w, k, 0, 0, template_mmers)
             print("sketch end", file=sys.stderr, flush=True)
             supporting_reads = []
-            print("# of supporting_seq_ids,", len(supporting_seq_ids), 
+            print("# of supporting_seq_ids,", len(supporting_seq_ids),
                     len(set([_[0] for _ in supporting_seq_ids])), file=sys.stderr, flush=True)
             for r in sorted(supporting_seq_ids):
-                rid2, direction = r 
-                # print("S:", rid2, direction, file=sys.stderr, flush=True)
+                rid2, direction = r
                 s = seqdb.index_data[rid2].offset
                 l = seqdb.index_data[rid2].length
                 read_seq = shimmer_ffi.new("char[{}]".format(l))
-                shimmer4py.decode_biseq(seqdb.seqdb[s:s+l], read_seq, l, direction) 
+                shimmer4py.decode_biseq(seqdb.seqdb[s:s+l], read_seq, l, direction)
                 offset = get_offset(template_mmers, read_seq, l, w, k)
                 # print("S:", rid2, offset, l, direction, file=sys.stderr, flush=True)
-            
+
                 supporting_reads.append( (rid2, offset, read_seq) )
 
             print("cns start", file=sys.stderr, flush=True)
@@ -296,7 +313,7 @@ if __name__ == "__main__":
             template_cns_segments.append(cns)
             for _1, _2, read_seq in supporting_reads:
                 shimmer_ffi.release(read_seq)
-            
+
             #print(cns.decode("ascii"))
         print(ctg, "S:",len(template_cns_segments), file=sys.stderr, flush=True)
 
@@ -311,8 +328,8 @@ if __name__ == "__main__":
         for i in range(len(template_cns_segments)-1):
             left_read = template_cns_segments[i][left_start:]
             right_read = template_cns_segments[i+1]
-            aln = get_shimmer_alns_from_seqs(left_read[-20000:], 
-                                             right_read[:20000], 
+            aln = get_shimmer_alns_from_seqs(left_read[-20000:],
+                                             right_read[:20000],
                                              parameters={"w":80, "max_repeat":1}) # still dangeous in some repeat case
             aln = [_ for _ in aln if len(_[0]) > 5]
             aln.sort(key = lambda _: -len(_[0]))
@@ -323,8 +340,8 @@ if __name__ == "__main__":
                 left_end = smer0.pos_end + len(left_read) - 20000
                 right_start = smer1.pos_end
             else:
-                aln = get_shimmer_alns_from_seqs(left_read[-20000:], 
-                                                 right_read[:20000], 
+                aln = get_shimmer_alns_from_seqs(left_read[-20000:],
+                                                 right_read[:20000],
                                                  parameters={"w":32, "max_repeat":12})
                 aln.sort(key = lambda _: -len(_[0]))
                 if len(aln) > 0:
@@ -334,20 +351,20 @@ if __name__ == "__main__":
                         right_start = smer1.pos_end
                         if left_end > right_start:
                             break
-                    print("DEBUG_1_left", left_end, 
-                            left_read.decode("ascii"), 
+                    print("DEBUG_1_left", left_end,
+                            left_read.decode("ascii"),
                             file = sys.stderr, flush=True)
-                    print("DEBUG_1_right", right_start, 
-                            right_read.decode("ascii"), 
+                    print("DEBUG_1_right", right_start,
+                            right_read.decode("ascii"),
                             file = sys.stderr, flush=True)
                 else:
                     left_end = len(left_read)
                     right_start = 0
-                    print("DEBUG_2_left", 
-                            left_end, left_read, 
+                    print("DEBUG_2_left",
+                            left_end, left_read,
                             file=sys.stderr, flush=True)
-                    print("DEBUG_2_right", 
-                            right_start, right_read, 
+                    print("DEBUG_2_right",
+                            right_start, right_read,
                             file=sys.stderr, flush=Ture)
             template_cns_seqs.append(left_read[:left_end].decode("ascii"))
             left_start = right_start

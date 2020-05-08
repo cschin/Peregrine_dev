@@ -2,6 +2,7 @@
 # import os
 import numpy as np
 import mmap
+import sys
 from collections import namedtuple
 from ._shimmer4py import ffi as shimmer_ffi
 from ._shimmer4py import lib as shimmer4py
@@ -184,7 +185,9 @@ def get_align_range(read_seq, ref_seq,
                               max_dist, aln_str)
         if abs(aln.aln_q_e-aln.aln_q_s) > 500:
             aligned = True
-            t_offset = 0
+            t_offset = aln.aln_t_s
+
+            # print("t_offset:", t_offset, file=sys.stderr, flush=True)
     else:
         aln = falcon4py.align(read_seq,
                               read_len,
@@ -203,9 +206,12 @@ def get_align_range(read_seq, ref_seq,
 def get_tag_from_seqs(read_seq, ref_seq,
                       read_offset,
                       max_dist=150,
-                      aln_len_max_diff=48):
+                      aln_len_max_diff=96):
     if read_offset is None:
         return None
+    
+    ## print("----",  file=sys.stderr, flush=True)
+
     aligned, aln, t_offset = get_align_range(read_seq, ref_seq,
                                              read_offset,
                                              max_dist=max_dist,
@@ -215,16 +221,23 @@ def get_tag_from_seqs(read_seq, ref_seq,
         dovetail = False
         read_len = len(read_seq)
         ref_len = len(ref_seq)
+        diff1 = abs(abs(aln.aln_q_e - aln.aln_q_s) - read_len)
+        diff2 = abs(ref_len - read_offset - abs(aln.aln_t_e - aln.aln_t_s))
         if read_offset < 0:
             if abs(abs(aln.aln_q_e - aln.aln_q_s) -
                     (read_len - abs(read_offset))) < aln_len_max_diff:
                 dovetail = True
         else:
-            if abs(abs(aln.aln_q_e - aln.aln_q_s) -
-                   read_len) < aln_len_max_diff or \
-               abs(ref_len - read_offset -
-                   abs(aln.aln_q_e - aln.aln_q_s)) < aln_len_max_diff:
+            if diff1 < aln_len_max_diff or \
+               diff2 < aln_len_max_diff:
                 dovetail = True
+
+        # print("align range:", read_len, aln.aln_q_s, 
+        # read_len, aln.aln_q_e, ref_len, 
+        # aln.aln_t_s, aln.aln_t_e, t_offset, file=sys.stderr, flush=True)
+        # print("align range2:", diff1, diff2, file=sys.stderr, flush=True)
+        # print("aligned:", read_offset, aligned, dovetail, file=sys.stderr, flush=True)
+
         if dovetail:
             rng = falcon_ffi.new("aln_range[1]")
             rng[0].s1 = aln.aln_q_s
@@ -235,8 +248,14 @@ def get_tag_from_seqs(read_seq, ref_seq,
                                            aln.t_aln_str,
                                            aln.aln_str_size,
                                            rng, 0, t_offset)
+
+            # print("rng:", aln.aln_q_s, aln.aln_q_e, aln.aln_t_s, aln.aln_t_e, file=sys.stderr, flush=True)
+
             falcon_ffi.release(rng)
         falcon4py.free_alignment(aln)
+    else:
+        print("alignment fail in util.get_tag_from_seqs():", read_offset,  file=sys.stderr, flush=True)
+
     return tag
 
 

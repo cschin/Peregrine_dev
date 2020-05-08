@@ -451,7 +451,7 @@ int main(int argc, char *argv[]) {
     uint32_t low_cov = 0;
 
     for (size_t p = 0; p < a_cseq->l; p++) {
-      if (cov[p] < 3) {
+      if (cov[p] < 2) {
         low_cov = 1;
         break;
       }
