@@ -330,15 +330,26 @@ if __name__ == "__main__":
             right_read = template_cns_segments[i+1]
             aln = get_shimmer_alns_from_seqs(left_read[-20000:],
                                              right_read[:20000],
-                                             parameters={"w":80, "max_repeat":1}) # still dangeous in some repeat case
+                                             parameters={"w":80, 
+                                                         "max_repeat":1,
+                                                         "max_diff": 100,
+                                                         "max_dist": 1000}) # still dangeous in some repeat case
             aln = [_ for _ in aln if len(_[0]) > 5]
             aln.sort(key = lambda _: -len(_[0]))
-
+            print(file=sys.stderr, flush=True)
             print("number of alns:", len(aln), file=sys.stderr, flush=True)
             if len(aln) == 1:
                 smer0, smer1 = aln[0][0][0] # first mmer-pair
                 left_end = smer0.pos_end + len(left_read) - 20000
                 right_start = smer1.pos_end
+                # print("left_start:", left_start, file=sys.stderr, flush=True)
+                # print("left_end  :", left_end, file=sys.stderr, flush=True)
+                # print("left_hang :", len(left_read)-left_end, file=sys.stderr, flush=True)
+                # print("LEFT :", left_read.decode(), file=sys.stderr, flush=True)
+                # print("RIGHT:", right_read.decode(), file=sys.stderr, flush=True)
+                # print("LEFT :", left_read.decode()[left_end:left_end+100], file=sys.stderr, flush=True)
+                # print("RIGHT:", right_read.decode()[right_start:right_start+100], file=sys.stderr, flush=True)
+                # print("right_start", right_start, file=sys.stderr, flush=True)
             else:
                 aln = get_shimmer_alns_from_seqs(left_read[-20000:],
                                                  right_read[:20000],

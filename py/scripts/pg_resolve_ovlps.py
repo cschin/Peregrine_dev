@@ -70,7 +70,7 @@ def run_overlap_annotation(wf, args):
     n_chunk = int(args["<ovlp_ann_nchunk>"])
     n_proc = int(args["<ovlp_ann_nproc>"])
     ovlp_ann_script = """
-        /usr/bin/time -v shmr_overlap_annotate \
+        /usr/bin/time -v shmr_overlap_annotate2 \
                 -p {params.read_db_prefix}\
                 -l {input.ovlp_file}\
                 -t {params.n_chunk}\
