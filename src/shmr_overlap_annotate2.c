@@ -46,7 +46,7 @@ typedef struct {
   uint32_t a_rid;
   uint32_t b_rid;
   int32_t match_size;
-  double err_est;
+  double acc_est;
   uint8_t a_strand;
   int32_t a_bgn, a_end;
   uint32_t a_len;
@@ -205,7 +205,7 @@ void build_ovlp_map(FILE *ovlp_file, khash_t(OVLP) * ovlp_map,
     nr = fscanf(ovlp_file, 
                 "%d %d %d %lf %hhu %d %d %u %hhu %d %d %u %s\n",
                 &(ovlp.a_rid), &(ovlp.b_rid), 
-                &(ovlp.match_size), &(ovlp.err_est), 
+                &(ovlp.match_size), &(ovlp.acc_est), 
                 &(ovlp.a_strand), 
                 &(ovlp.a_bgn), &(ovlp.a_end), &(ovlp.a_len),
                 &(ovlp.b_strand), 
@@ -213,6 +213,10 @@ void build_ovlp_map(FILE *ovlp_file, khash_t(OVLP) * ovlp_map,
                 (char *) &(ovlp.ovlp_type));
     if (nr == 0 || nr == EOF) {
       break;
+    }
+	
+    if (ovlp.acc_est < 98) {
+      continue;
     }
     if (ovlp.a_rid % total_chunk == my_chunk % total_chunk) {
       k = kh_put(OVLP, ovlp_map, ovlp.a_rid, &absent);
@@ -508,7 +512,7 @@ int main(int argc, char *argv[]) {
         }
       }
       printf("%09d %09d %d %0.2f %hhu %d %d %u %hhu %d %d %u %s %d %d %d %d\n",
-             ovlp.a_rid, ovlp.b_rid, ovlp.match_size, ovlp.err_est,
+             ovlp.a_rid, ovlp.b_rid, ovlp.match_size, ovlp.acc_est,
              ovlp.a_strand, ovlp.a_bgn, ovlp.a_end, ovlp.a_len, ovlp.b_strand,
              ovlp.b_bgn, ovlp.b_end, ovlp.b_len, (char *)ovlp.ovlp_type, test_n,
              match_n, test_n - match_n, low_cov);
