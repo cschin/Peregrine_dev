@@ -185,7 +185,9 @@ def stiching_reads(tiling_path_data, seqdb, ovlps):
     for seg in segments:
         s = seg[1]
         e = seg[1] + len(shimmer_ffi.string(seg[2]))
-        ctg_str[s:e] = list(shimmer_ffi.string(seg[2]))
+        if e > ctg_len: # 1. in some case the 2nd to last read can extend beyond the ctg_len
+            e = ctg_len 
+        ctg_str[s:e] = list(shimmer_ffi.string(seg[2]))[:e-s] # see 1. above, not ideal but the slicing on the RHS is necessary
         shimmer_ffi.release(seg[2])
     template_seq = bytes(ctg_str)
     print("stiching done, ctg:", ctg_id, file=sys.stderr, flush=True)
