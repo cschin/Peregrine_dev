@@ -10,7 +10,6 @@ from ._falcon4py import ffi as falcon_ffi
 from ._falcon4py import lib as falcon4py
 from collections import Counter
 # from ._ksw4py import ffi as ksw4py_ffi
-from ._ksw4py import lib as ksw4py
 
 
 rmap = dict(list(zip(b"ACGT", b"TGCA")))
@@ -209,7 +208,7 @@ def get_tag_from_seqs(read_seq, ref_seq,
                       aln_len_max_diff=96):
     if read_offset is None:
         return None
-    
+
     ## print("----",  file=sys.stderr, flush=True)
 
     aligned, aln, t_offset = get_align_range(read_seq, ref_seq,
@@ -232,8 +231,8 @@ def get_tag_from_seqs(read_seq, ref_seq,
                diff2 < aln_len_max_diff:
                 dovetail = True
 
-        # print("align range:", read_len, aln.aln_q_s, 
-        # read_len, aln.aln_q_e, ref_len, 
+        # print("align range:", read_len, aln.aln_q_s,
+        # read_len, aln.aln_q_e, ref_len,
         # aln.aln_t_s, aln.aln_t_e, t_offset, file=sys.stderr, flush=True)
         # print("align range2:", diff1, diff2, file=sys.stderr, flush=True)
         # print("aligned:", read_offset, aligned, dovetail, file=sys.stderr, flush=True)
@@ -423,10 +422,3 @@ class SequenceDatabase(object):
         self._f.close()
 
 
-def get_cigar(seq0, seq1, score=(2, -4, 4, 2)):
-    r = ksw4py.align(seq0, seq1, score[0], score[1], score[2], score[3])
-    cigars = []
-    for i in range(r.n_cigar):
-        cigars.append(("MID"[r.cigar[i] & 0xf], r.cigar[i] >> 4))
-    ksw4py.free(r.cigar)
-    return cigars, r.score

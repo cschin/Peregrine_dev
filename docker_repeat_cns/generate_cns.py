@@ -12,7 +12,6 @@ from peregrine.utils import get_shimmers_from_seq
 from peregrine.utils import get_shimmer_alns_from_seqs
 from peregrine.utils import rc
 from peregrine.utils import get_cns_from_reads
-from peregrine.ctg_align import SeqDBAligner, get_shimmer_dots
 
 import umap
 import numpy as np
@@ -130,6 +129,8 @@ if __name__ == "__main__":
     outdir = sys.argv[2]
     bamfile = sys.argv[3]
     reffile = sys.argv[4]
+    min_len = int(sys.argv[5])
+    max_len = int(sys.argv[6])
 
     os.system(f"mkdir -p {outdir}")
     prepare_reads(workdir, bamfile, reffile)
@@ -140,7 +141,9 @@ if __name__ == "__main__":
     read_sdb=SequenceDatabase(f"{workdir}/reads.idx", f"{workdir}/reads.seqdb")
     sub_ref_sdb=SequenceDatabase(f"{workdir}/ref.idx", f"{workdir}/ref.seqdb")
 
-    rids = list(read_sdb.index_data.keys())
+    rids = list([rid for rid in read_sdb.index_data.keys()
+                 if read_sdb.index_data[rid].length > min_len and
+                    read_sdb.index_data[rid].length < max_len])
     if len(rids) > 500:
         rids = np.array(sorted(random.sample(rids, 500)))
 
@@ -184,8 +187,8 @@ if __name__ == "__main__":
             print(s2.decode(), file=f)
 
         cmds = [f"/opt/dipcall.kit/minimap2 -a -xasm5 --cs -r2k -z1000000,100000 -t8 {reffile} {fn} 2> {fnprefix}.sam.gz.log | gzip > {fnprefix}.sam.gz"]
-        cmds.append(f"/opt/dipcall.kit/k8 dipcall.kit/dipcall-aux.js samflt -L 10000 {fnprefix}.sam.gz | dipcall.kit/samtools sort -m4G --threads 1 -o {fnprefix}.bam -")
-        cmds.append(f"/opt/dipcall.kit/htsbox pileup -q5 -evcf {reffile} {fnprefix}.bam  | dipcall.kit/htsbox bgzip > {fnprefix}.vcf.gz")
+        cmds.append(f"/opt/dipcall.kit/k8 /opt/dipcall.kit/dipcall-aux.js samflt -L 10000 {fnprefix}.sam.gz | /opt/dipcall.kit/samtools sort -m4G --threads 1 -o {fnprefix}.bam -")
+        cmds.append(f"/opt/dipcall.kit/htsbox pileup -q5 -evcf {reffile} {fnprefix}.bam  | /opt/dipcall.kit/htsbox bgzip > {fnprefix}.vcf.gz")
         cmds.append(f"rm {fnprefix}.sam.gz.log {fnprefix}.sam.gz {fnprefix}.bam ")
         print("\n".join(cmds))
         print()

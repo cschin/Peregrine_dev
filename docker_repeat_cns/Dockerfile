@@ -11,7 +11,7 @@ RUN . /opt/conda/bin/activate; conda clean -all
 FROM continuumio/miniconda3
 COPY --from=0 /opt/conda /opt/conda
 RUN apt-get update
-RUN apt-get install -y parallel time
+RUN apt-get install -y parallel time wget
 RUN . /opt/conda/bin/activate; conda activate peregrine;
 RUN apt-get install -y make
 RUN mkdir /opt/licenses
