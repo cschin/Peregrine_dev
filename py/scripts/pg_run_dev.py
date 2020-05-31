@@ -350,7 +350,7 @@ def run_overlapper(wf, args,
 def run_ovlp_to_ctg(wf, args, read_db_abs_prefix, read_db, ovlps):
     asm_script = """\
 cat {params.ovlps} | shmr_dedup > preads.ovl; echo "-" >> preads.ovl
-/usr/bin/time ovlp_to_graph_exp.py --min_len {params.min_len} \
+/usr/bin/time ovlp_to_graph_exp2.py --min_len {params.min_len} \
     --min_idt {params.min_idt} >& asm.log
 /usr/bin/time graph_to_path.py >& to_path.log
 /usr/bin/time path_to_contig.py {params.read_db_prefix} \

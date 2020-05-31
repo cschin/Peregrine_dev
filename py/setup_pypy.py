@@ -7,4 +7,5 @@ setup(name='peregrine_pypy',
       install_requires=["networkx>=2.4"],
       scripts = ["scripts/ovlp_to_graph.py",
                  "scripts/ovlp_to_graph_exp.py",
+                 "scripts/ovlp_to_graph_exp2.py",
                  "scripts/graph_to_path.py"])

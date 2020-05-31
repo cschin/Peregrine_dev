@@ -16,7 +16,7 @@ with open(fn) as f:
             continue
         d = int(r[13])
         n = int(r[14])
-        if d ==0 or 1.0*n/d > 0.75:
+        if d < 4 or 1.0*n/d >= 0.75:
             print(" ".join(r))
             phasable_reads.add(r[0])
             phasable_reads.add(r[1])

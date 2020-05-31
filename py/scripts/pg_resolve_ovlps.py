@@ -27,8 +27,8 @@ Usage:
 Options:
   -h --help                   Show this help
   --version                   Show version
-  --min_len <min_len>         Minimum overlap length for assembly graph construction [default: 4000]
-  --min_idt <min_idt>         Minimum identity for considering two reads that are properly overlaps [default: 96]
+  --min_len <min_len>         Minimum overlap length for assembly graph construction [default: 12000]
+  --min_idt <min_idt>         Minimum identity for considering two reads that are properly overlaps [default: 98]
 
 """
 
@@ -115,7 +115,7 @@ cat {params.ovlps} > preads-ann.ovl
 cat preads-ann.ovl | awk '$NF == 1 {{print $1}}' | sort -u > filtered_out_reads
 filter_ovlp.py > preads-rr.ovl
 rm preads-ann.ovl
-/usr/bin/time ovlp_to_graph.py  --overlap-file preads-rr.ovl --min_len {params.min_len} \
+/usr/bin/time ovlp_to_graph_exp2.py  --overlap-file preads-rr.ovl --min_len {params.min_len} \
     --min_idt {params.min_idt} >& asm.log
 /usr/bin/time graph_to_path.py >& to_path.log
 /usr/bin/time path_to_contig.py {params.read_db_prefix} \
