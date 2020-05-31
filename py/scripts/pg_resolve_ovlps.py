@@ -119,7 +119,7 @@ rm preads-ann.ovl
     --min_idt {params.min_idt} >& asm.log
 /usr/bin/time graph_to_path.py >& to_path.log
 /usr/bin/time path_to_contig.py {params.read_db_prefix} \
-    p_ctg_tiling_path > {output.p_ctg} 2> to_contig.loga \
+    p_ctg_tiling_path > {output.p_ctg} 2> to_contig.log \
 
 
 # TODO, change these parts using 'parallel' quikc hacks to use proper pypeflow tasks
