@@ -103,7 +103,7 @@ def get_consensus(rids, labels, read_sdb):
         #plt.hist(list(read_length.values()), bins=32, range=(10000,15000))
         cns=get_cns_from_reads(list(reads2.values()), sort_reads=False, best_n=1000, levels=1, w=32)
         consensus.append( (len(reads2), cns, reads, reads2))
-    consensus.sort()
+    consensus.sort(key=lambda x:x[0])
     consensus.reverse()
     return consensus
 
