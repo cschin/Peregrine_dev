@@ -111,49 +111,6 @@ void build_map2(mm128_v *mmers, khash_t(MMER0) * mmer0_map,
 
     rp.direction = ORIGINAL;
     kv_push(mp128_t, NULL, *mpv, rp);
-    // printf("Y %lu %lu %09u\n", mmer0.x >> 8, mmer1.x >> 8, (uint32_t)
-    // (rp.y0 >> 32));
-
-    // reverse direction
-    /*
-    k = kh_put(MMER0, mmer0_map, mmer1.x, &absent);
-    if (absent) kh_value(mmer0_map, k) = kh_init(MMER1);
-
-    mmer1_map = kh_value(mmer0_map, k);
-    k = kh_put(MMER1, mmer1_map, mmer0.x, &absent);
-    if (absent) {
-      mpv = kmalloc(NULL, sizeof(mp128_v));
-      mpv->n = 0;
-      mpv->m = 0;
-      mpv->a = NULL;
-      kh_value(mmer1_map, k) = mpv;
-    } else {
-      mpv = kh_value(mmer1_map, k);
-    }
-    rp.y0 = mmer1.y;
-    span = mmer1.x & 0xFF;
-    rid = rp.y0 >> 32;
-    pos = ((rp.y0 & 0xFFFFFFFF) >> 1) + 1;
-    k = kh_get(RLEN, rlmap, rid);
-    assert(k != kh_end(rlmap));
-    rpos = kh_val(rlmap, k).len - pos + span - 1;
-    rp.y0 = ((rp.y0 & 0xFFFFFFFF00000001) | (rpos << 1)) ^
-            0x1;  // ^0x1 -> switch strand
-
-    rp.y1 = mmer0.y;
-    span = mmer0.x & 0xFF;
-    rid = rp.y1 >> 32;
-    pos = ((rp.y1 & 0xFFFFFFFF) >> 1) + 1;
-    k = kh_get(RLEN, rlmap, rid);
-    assert(k != kh_end(rlmap));
-    rpos = kh_val(rlmap, k).len - pos + span - 1;
-    rp.y1 = ((rp.y1 & 0xFFFFFFFF00000001) | (rpos << 1)) ^
-            0x1;  // ^0x1 -> switch strand
-    rp.direction = REVERSED;
-
-    kv_push(mp128_t, NULL, *mpv, rp);
-      // printf("Y %lu %lu %09u\n", mmer1.x >> 8, mmer0.x >> 8, rid);
-    */
     mmer0 = mmer1;
   }
 }
@@ -198,9 +155,39 @@ void set_rid_pair(khash_t(RPAIR) *rid_pairs,
   kh_val(rid_pairs, k) = 1;
 }
 
-void build_ovlp(mm128_v *mmers, khash_t(MMER0) * mmer0_map,
-               khash_t(RLEN) * rlmap, khash_t(MMC) * mcmap, uint32_t chunk,
-               uint32_t total_chunk, uint32_t lowerbound, uint32_t upperbound) {
+ovlp_match_t * match_seqs(uint8_t * seq0, uint8_t * seq1, 
+                          uint32_t pos0, uint32_t pos1, 
+                          uint32_t rlen0, uint32_t rlen1,
+                          uint32_t strand0, uint32_t strand1) {
+      uint32_t slen0;
+      uint32_t slen1;
+      ovlp_match_t *match;
+      uint32_t align_bandwidth = 100;
+      if (pos0 >= pos1) {
+        slen0 = rlen0 - (pos0 - pos1);
+        slen1 = rlen1;
+        match = ovlp_match(seq0 + pos0 - pos1, slen0, strand0, 
+                           seq1, slen1, strand1, 
+                           align_bandwidth);
+      } else {
+        slen0 = rlen0;
+        slen1 = rlen1 - (pos1 - pos0);
+        match = ovlp_match(seq0, slen0, strand0, 
+                           seq1 + pos1 - pos0, slen1, strand1, 
+                           align_bandwidth);
+      }
+      return match;
+}
+
+void build_ovlp(mm128_v *mmers, 
+               khash_t(MMER0) * mmer0_map,
+               khash_t(RLEN) * rlmap, 
+               khash_t(MMC) * mcmap, 
+               uint32_t chunk,
+               uint32_t total_chunk, 
+               uint32_t lowerbound, 
+               uint32_t upperbound,
+               uint8_t * seq_p) {
   uint64_t mhash;
   mm128_t mmer0, mmer1;
   mp128_v *mpv;
@@ -214,6 +201,9 @@ void build_ovlp(mm128_v *mmers, khash_t(MMER0) * mmer0_map,
   khash_t(MMER1) * mmer1_map;
   size_t s = 0;
   khash_t(RPAIR) *rid_pairs = kh_init(RPAIR);
+  uint8_t *seq0 = NULL;
+  uint8_t *seq1 = NULL;
+  ovlp_match_t *match;
 
   for (;;) {
     if (s >= mmers->n) break;
@@ -227,6 +217,9 @@ void build_ovlp(mm128_v *mmers, khash_t(MMER0) * mmer0_map,
   }
 
   for (size_t i = s + 1; i < mmers->n; i++) {
+    uint32_t rid0, pos0, rlen0, strand0;
+    uint32_t rid1, pos1, rlen1, strand1;
+
     mmer1 = mmers->a[i];
     mhash = mmer1.x >> 8;
     k = kh_get(MMC, mcmap, mhash);
@@ -251,30 +244,47 @@ void build_ovlp(mm128_v *mmers, khash_t(MMER0) * mmer0_map,
       continue; 
     }
 
+    rid1 = (uint32_t)(mmer0.y >> 32);
+    pos1 = (uint32_t)((mmer0.y & 0xFFFFFFFF) >> 1) + 1;
+    strand1 = ORIGINAL;
+    k = kh_get(RLEN, rlmap, rid1);
+    assert(k != kh_end(rlmap));
+    rlen1 = kh_val(rlmap, k).len;
     for (size_t __k0 = 0; __k0 <  (mpv->n) ; __k0++) { 
       uint64_t y0;
       y0 = mpv->a[__k0].y0;
-      if (y0 >> 32 == mmer0.y >> 32) {
+      rid0 = (uint32_t)(y0 >> 32);
+      if (rid0 == rid1) {
           continue;
       }
-      uint32_t rid0, pos0, rlen0, strand0;
-      uint32_t rid1, pos1, rlen1, strand1;
-      rid0 = (uint32_t)(y0 >> 32);
-      rid1 = (uint32_t)(mmer0.y >> 32);
       if (check_rid_pair(rid_pairs, rid0, rid1)) continue;
+
+      k = kh_get(RLEN, rlmap, rid0);
+      assert(k != kh_end(rlmap));
+      rlen0 = kh_val(rlmap, k).len;
 
       pos0 = (uint32_t)((y0 & 0xFFFFFFFF) >> 1) + 1;
       strand0 = mpv->a[__k0].direction;
 
-      pos1 = (uint32_t)((mmer0.y & 0xFFFFFFFF) >> 1) + 1;
-      // assert(pos0 - pos1 >= 0);
-      // k = kh_get(RLEN, rlmap, rid1);
-      // assert(k != kh_end(rlmap));
-      // rlen1 = kh_val(rlmap, k).len;
-      strand1 = ORIGINAL;
-      printf("%d %d %d %d %d %d\n", 
+      seq0 = get_read_seq_mmap_ptr(seq_p, rid0, rlmap);
+      seq1 = get_read_seq_mmap_ptr(seq_p, rid1, rlmap);
+      match = match_seqs(seq0, seq1, 
+                         pos0, pos1, 
+                         rlen0, rlen1, 
+                         strand0, strand1);
+      
+      
+      seq_coor_t q_bgn, q_end, t_bgn, t_end;
+      q_bgn = match->q_bgn;
+      q_end = match->q_end;
+      t_bgn = match->t_bgn;
+      t_end = match->t_end;
+      printf("%d %d %d %d %d %d %d %d %d %d\n", 
               rid0, pos0, strand0, 
-              rid1, pos1, strand1);  
+              rid1, pos1, strand1,
+              q_bgn, q_end,
+              t_bgn, t_end);  
+      free_ovlp_match(match);
       set_rid_pair(rid_pairs, rid0, rid1);
     }
 
@@ -285,33 +295,46 @@ void build_ovlp(mm128_v *mmers, khash_t(MMER0) * mmer0_map,
       continue; 
     }
 
+    rid1 = (uint32_t)(mmer1.y >> 32);
+    pos1 = (uint32_t)((mmer1.y & 0xFFFFFFFF) >> 1) + 1;
+    span = mmer1.x & 0xFF;
+    pos1 = rlen1 - pos1 + span - 1;
+    strand1 = REVERSED;
     for (size_t __k0 = 0; __k0 <  (mpv->n) ; __k0++) { 
       uint64_t y0;
       y0 = mpv->a[__k0].y0;
-      if (y0 >> 32 == mmer0.y >> 32) {
+      rid0 = (uint32_t)(y0 >> 32);
+      if (rid0 == rid1) {
           continue;
       }
-      uint32_t rid0, pos0, rlen0, strand0;
-      uint32_t rid1, pos1, rlen1, strand1;
-      rid0 = (uint32_t)(y0 >> 32);
-      rid1 = (uint32_t)(mmer0.y >> 32);
       if (check_rid_pair(rid_pairs, rid0, rid1)) continue;
+
+      k = kh_get(RLEN, rlmap, rid0);
+      assert(k != kh_end(rlmap));
+      rlen0 = kh_val(rlmap, k).len;
 
       pos0 = (uint32_t)((y0 & 0xFFFFFFFF) >> 1) + 1;
       strand0 = mpv->a[__k0].direction;
 
-      pos1 = (uint32_t)((mmer0.y & 0xFFFFFFFF) >> 1) + 1;
-      // assert(pos0 - pos1 >= 0);
-      k = kh_get(RLEN, rlmap, rid1);
-      assert(k != kh_end(rlmap));
-      rlen1 = kh_val(rlmap, k).len;
-      span = mmer0.x & 0xFF;
-      pos1 = rlen1 - pos1 + span - 1;
-      strand1 = REVERSED;
-      printf("%d %d %d %d %d %d\n", 
+      seq0 = get_read_seq_mmap_ptr(seq_p, rid0, rlmap);
+      seq1 = get_read_seq_mmap_ptr(seq_p, rid1, rlmap);
+      match = match_seqs(seq0, seq1, 
+                         pos0, pos1, 
+                         rlen0, rlen1, 
+                         strand0, strand1);
+
+      seq_coor_t q_bgn, q_end, t_bgn, t_end;
+      q_bgn = match->q_bgn;
+      q_end = match->q_end;
+      t_bgn = match->t_bgn;
+      t_end = match->t_end;
+      printf("%d %d %d %d %d %d %d %d %d %d\n", 
               rid0, pos0, strand0, 
-              rid1, pos1, strand1);  
+              rid1, pos1, strand1,
+              q_bgn, q_end,
+              t_bgn, t_end);  
       set_rid_pair(rid_pairs, rid0, rid1);
+      free_ovlp_match(match);
     }
     mmer0 = mmer1;
   }
@@ -670,9 +693,23 @@ int main(int argc, char *argv[]) {
              mychunk, total_chunk, 
              mc_lower, mc_upper);
 
+  int fd;
+  struct stat sb;
+  uint8_t *seq_p;
+
+  fd = open(seqdb_file_path, O_RDONLY);
+  if (fd == -1) handle_error("open");
+
+  if (fstat(fd, &sb) == -1) /* To obtain file size */
+    handle_error("fstat");
+
+  seq_p = (uint8_t *)mmap((void *)0, sb.st_size, PROT_READ, MAP_SHARED, fd, 0);
+
   build_ovlp(&mmers, mmer0_map, rlmap, mcmap, 
              mychunk, total_chunk, mc_lower,
-             mc_upper);
+             mc_upper,
+             seq_p);
+  munmap(seq_p, sb.st_size);
 /*
   process_overlaps(seqdb_file_path, mmer0_map, rlmap, mcmap, bestn, ovlp_upper,
                    align_bandwidth, ovlp_file);
