@@ -41,6 +41,17 @@ extern int optind, opterr, optopt;
 #define CONTAINED 2
 #define ALNBANDSIZE 100
 
+typedef struct {
+    uint32_t rid0, rid1, strand1, len0;
+    int32_t d_left, d_right;
+} ovlp_candidate_t;
+
+
+typedef struct {
+  size_t n, m;
+  ovlp_candidate_t *a;
+} ovlp_candidate_v;
+
 void build_map2(mm128_v *mmers, khash_t(MMER0) * mmer0_map,
                khash_t(RLEN) * rlmap, khash_t(MMC) * mcmap, uint32_t chunk,
                uint32_t total_chunk, uint32_t lowerbound, uint32_t upperbound) {
@@ -134,52 +145,212 @@ mp128_v * match_shimmer_pair(khash_t(MMER0) * mmer0_map, mm128_t mmer0,mm128_t m
 
 KHASH_MAP_INIT_INT64(RPAIR, uint8_t);
 
-bool check_rid_pair(khash_t(RPAIR) *rid_pairs, 
+uint32_t get_rid_pair_count(khash_t(RPAIR) *rid_pairs, 
                     uint32_t rid0,
                     uint32_t rid1) {
   uint64_t ridp;
   khiter_t k;
   ridp = (((uint64_t)rid0) << 32) | ((uint64_t)rid1);
   k = kh_get(RPAIR, rid_pairs, ridp);
-  return (k != kh_end(rid_pairs));
+  if (k == kh_end(rid_pairs)) {
+      return 0;
+  } else {
+      return kh_val(rid_pairs, k);
+  }
 }
 
-void set_rid_pair(khash_t(RPAIR) *rid_pairs,
+void increase_rid_pair_count(khash_t(RPAIR) *rid_pairs,
                   uint32_t rid0,
                   uint32_t rid1) {
   uint64_t ridp;
   int32_t absent;
   khiter_t k;
   ridp = (((uint64_t)rid0) << 32) | ((uint64_t)rid1);
-  k = kh_put(RPAIR, rid_pairs, ridp, &absent);
-  kh_val(rid_pairs, k) = 1;
+  k = kh_get(RPAIR, rid_pairs, ridp);
+  if (k == kh_end(rid_pairs)) {
+     k = kh_put(RPAIR, rid_pairs, ridp, &absent);
+     kh_val(rid_pairs, k) = 1;
+  } else {
+     kh_val(rid_pairs, k) += 1;
+  }
 }
 
 ovlp_match_t * match_seqs(uint8_t * seq0, uint8_t * seq1, 
-                          uint32_t pos0, uint32_t pos1, 
+                          int32_t d_left, 
                           uint32_t rlen0, uint32_t rlen1,
-                          uint32_t strand0, uint32_t strand1) {
-      uint32_t slen0;
-      uint32_t slen1;
+                          uint32_t strand1) {
       ovlp_match_t *match;
       uint32_t align_bandwidth = 100;
-      if (pos0 >= pos1) {
-        slen0 = rlen0 - (pos0 - pos1);
-        slen1 = rlen1;
-        match = ovlp_match(seq0 + pos0 - pos1, slen0, strand0, 
-                           seq1, slen1, strand1, 
+      if (d_left > 0 ) {
+        match = ovlp_match(seq0 + d_left, rlen0 - d_left, ORIGINAL, 
+                           seq1, rlen1, strand1, 
                            align_bandwidth);
       } else {
-        slen0 = rlen0;
-        slen1 = rlen1 - (pos1 - pos0);
-        match = ovlp_match(seq0, slen0, strand0, 
-                           seq1 + pos1 - pos0, slen1, strand1, 
+        d_left = abs(d_left);
+        match = ovlp_match(seq0, rlen0, ORIGINAL, 
+                           seq1 + d_left, rlen1 - d_left, strand1, 
                            align_bandwidth);
       }
       return match;
 }
 
-void build_ovlp(mm128_v *mmers, 
+KHASH_MAP_INIT_INT(OVLP_CANDIDATES, ovlp_candidate_v *);
+
+void push_ovlp_candidate(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
+                         ovlp_candidate_t *candidate) {
+  uint32_t rid0 = candidate->rid0;
+  int32_t absent;
+  khiter_t k;
+  k = kh_get(OVLP_CANDIDATES, ovlp_candidates, rid0);
+  if (k == kh_end(ovlp_candidates)) {
+     k = kh_put(OVLP_CANDIDATES, ovlp_candidates, rid0, &absent);
+     ovlp_candidate_v *v;
+     v = (ovlp_candidate_v *) calloc(1, sizeof(ovlp_candidate_v));
+     kv_init(*v);
+     kh_val(ovlp_candidates, k) = v;
+     kv_push(ovlp_candidate_t, NULL, *v, *candidate);
+  } else {
+     ovlp_candidate_v *v;
+     v = kh_val(ovlp_candidates, k);
+     kv_push(ovlp_candidate_t, NULL, *v, *candidate);
+  }
+}
+
+int ovlp_comp_left(const void *a, const void *b) {
+  ovlp_candidate_t *a0 = (ovlp_candidate_t *)a;
+  ovlp_candidate_t *b0 = (ovlp_candidate_t *)b;
+  return abs(a0->d_left) >= abs(b0->d_left);
+}
+
+int ovlp_comp_right(const void *a, const void *b) {
+  ovlp_candidate_t *a0 = (ovlp_candidate_t *)a;
+  ovlp_candidate_t *b0 = (ovlp_candidate_t *)b;
+  return abs(a0->d_right) >= abs(b0->d_right);
+}
+
+bool check_match(ovlp_match_t *match, uint32_t slen0, uint32_t slen1) {
+  seq_coor_t q_bgn, q_end, t_bgn, t_end;
+  q_bgn = match->q_bgn;
+  q_end = match->q_end;
+  t_bgn = match->t_bgn;
+  t_end = match->t_end;
+  if (q_end < 500 || t_end < 500)  return false;
+  double err_est;
+  err_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size);
+  if (err_est < 97) return false;;
+
+  if (q_bgn > READ_END_FUZZINESS || t_bgn > READ_END_FUZZINESS) return false; 
+  if ((abs((int64_t) (slen0) - (int64_t) q_end) < READ_END_FUZZINESS) ||  
+      (abs((int64_t) (slen1) - (int64_t) t_end) < READ_END_FUZZINESS)) return false;
+  return true;
+}
+
+void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
+                     khash_t(RLEN) * rlmap,
+                     uint8_t *seq_p) {
+  ovlp_candidate_v * v;
+  uint32_t rlen0,  rlen1;
+  uint32_t rid0;
+  uint8_t *seq0 = NULL;
+  uint8_t *seq1 = NULL;
+  khiter_t k;
+  ovlp_match_t *match;
+  for (khiter_t __i = kh_begin(ovlp_candidates); 
+         __i != kh_end(ovlp_candidates); 
+         ++__i) {
+    if (!kh_exist(ovlp_candidates, __i)) continue;
+    v = kh_val(ovlp_candidates, __i);
+    rid0 = v->a[0].rid0;
+    k = kh_get(RLEN, rlmap, rid0);
+    assert(k != kh_end(rlmap));
+    rlen0 = kh_val(rlmap, k).len;
+    seq0 = get_read_seq_mmap_ptr(seq_p, rid0, rlmap);
+    qsort(v->a, v->n, sizeof(ovlp_candidate_t), ovlp_comp_left);
+    uint32_t ovlp_count=0;
+    for (uint32_t i = 0; i < v->n; i++) {
+      ovlp_candidate_t c;
+      c = v->a[i];
+      if (c.d_left <= 0) continue;
+
+      k = kh_get(RLEN, rlmap, c.rid1);
+      assert(k != kh_end(rlmap));
+      rlen1 = kh_val(rlmap, k).len;
+      
+      seq1 = get_read_seq_mmap_ptr(seq_p, c.rid1, rlmap);
+      match = match_seqs(seq0, seq1, 
+                         c.d_left,
+                         rlen0, rlen1, 
+                         c.strand1);
+      if (check_match(match, rlen0 - c.d_left, rlen1) == false) {
+          free_ovlp_match(match);
+          continue;
+      }       
+      seq_coor_t q_bgn, q_end, t_bgn, t_end;
+      q_bgn = match->q_bgn;
+      q_end = match->q_end;
+      t_bgn = match->t_bgn;
+      t_end = match->t_end;
+
+      if (c.d_right > 2500) ovlp_count++;
+      double err_est;
+      err_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size);
+      printf("%d %d %d %d %d %d %d %d %d %d %0.2f\n",
+            c.rid0,
+            c.rid1,
+            c.strand1,
+            c.len0,
+            c.d_left,
+            c.d_right,
+            c.d_left + q_bgn,
+            t_bgn,
+            c.d_left + q_end,
+            t_end,
+            err_est);
+      free_ovlp_match(match);
+      if (ovlp_count > 5) break;
+    }
+    qsort(v->a, v->n, sizeof(ovlp_candidate_t), ovlp_comp_right);
+    ovlp_count=0;
+    for (uint32_t i = 0; i < v->n; i++) {
+      ovlp_candidate_t c;
+      c = v->a[i];
+      if (c.d_right >= 0) continue;
+      seq1 = get_read_seq_mmap_ptr(seq_p, c.rid1, rlmap);
+      match = match_seqs(seq0, seq1, 
+                         c.d_left,
+                         rlen0, rlen1, 
+                         c.strand1);
+      if (check_match(match, rlen0, rlen1 - abs(c.d_left)) == false) {
+          free_ovlp_match(match);
+          continue;
+      }       
+      seq_coor_t q_bgn, q_end, t_bgn, t_end;
+      q_bgn = match->q_bgn;
+      q_end = match->q_end;
+      t_bgn = match->t_bgn;
+      t_end = match->t_end;
+      if (c.d_left < -2500) ovlp_count++;
+      double err_est;
+      err_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size);
+      printf("%d %d %d %d %d %d %d %d %d %d %0.2f\n",
+            c.rid0,
+            c.rid1,
+            c.strand1,
+            c.len0,
+            c.d_left,
+            c.d_right,
+            c.d_left + q_bgn,
+            t_bgn,
+            c.d_left + q_end,
+            t_end,
+            err_est);
+      free_ovlp_match(match);
+      if (ovlp_count > 5) break;
+    }
+  }
+}
+
+void build_ovlp_candidates(mm128_v *mmers, 
                khash_t(MMER0) * mmer0_map,
                khash_t(RLEN) * rlmap, 
                khash_t(MMC) * mcmap, 
@@ -187,7 +358,7 @@ void build_ovlp(mm128_v *mmers,
                uint32_t total_chunk, 
                uint32_t lowerbound, 
                uint32_t upperbound,
-               uint8_t * seq_p) {
+               khash_t(OVLP_CANDIDATES) * ovlp_candidates) {
   uint64_t mhash;
   mm128_t mmer0, mmer1;
   mp128_v *mpv;
@@ -201,8 +372,8 @@ void build_ovlp(mm128_v *mmers,
   khash_t(MMER1) * mmer1_map;
   size_t s = 0;
   khash_t(RPAIR) *rid_pairs = kh_init(RPAIR);
-  uint8_t *seq0 = NULL;
-  uint8_t *seq1 = NULL;
+  // uint8_t *seq0 = NULL;
+  // uint8_t *seq1 = NULL;
   ovlp_match_t *match;
 
   for (;;) {
@@ -257,7 +428,7 @@ void build_ovlp(mm128_v *mmers,
       if (rid0 == rid1) {
           continue;
       }
-      if (check_rid_pair(rid_pairs, rid0, rid1)) continue;
+      if (get_rid_pair_count(rid_pairs, rid0, rid1) > 0) continue;
 
       k = kh_get(RLEN, rlmap, rid0);
       assert(k != kh_end(rlmap));
@@ -266,6 +437,7 @@ void build_ovlp(mm128_v *mmers,
       pos0 = (uint32_t)((y0 & 0xFFFFFFFF) >> 1) + 1;
       strand0 = mpv->a[__k0].direction;
 
+      /*
       seq0 = get_read_seq_mmap_ptr(seq_p, rid0, rlmap);
       seq1 = get_read_seq_mmap_ptr(seq_p, rid1, rlmap);
       match = match_seqs(seq0, seq1, 
@@ -279,13 +451,20 @@ void build_ovlp(mm128_v *mmers,
       q_end = match->q_end;
       t_bgn = match->t_bgn;
       t_end = match->t_end;
-      printf("%d %d %d %d %d %d %d %d %d %d\n", 
-              rid0, pos0, strand0, 
-              rid1, pos1, strand1,
-              q_bgn, q_end,
-              t_bgn, t_end);  
-      free_ovlp_match(match);
-      set_rid_pair(rid_pairs, rid0, rid1);
+      */
+      ovlp_candidate_t candidate;
+      candidate.rid0 = rid0;
+      candidate.rid1 = rid1;
+      candidate.strand1 = strand1;
+      candidate.len0 = rlen0;
+      candidate.d_left = (int32_t) pos0 - (int32_t) pos1;
+      candidate.d_right = (int32_t) pos0 - (int32_t) pos1 + (int32_t) rlen1 - (int32_t) rlen0;
+      push_ovlp_candidate(ovlp_candidates, &candidate);
+      //printf("%d %d %d %d %d %d\n", 
+      //        rid0, pos0, strand0, 
+      //        rid1, pos1, strand1);
+      increase_rid_pair_count(rid_pairs, rid0, rid1);
+      //free_ovlp_match(match);
     }
 
     // reverse
@@ -307,7 +486,7 @@ void build_ovlp(mm128_v *mmers,
       if (rid0 == rid1) {
           continue;
       }
-      if (check_rid_pair(rid_pairs, rid0, rid1)) continue;
+      if (get_rid_pair_count(rid_pairs, rid0, rid1) > 0) continue;
 
       k = kh_get(RLEN, rlmap, rid0);
       assert(k != kh_end(rlmap));
@@ -315,7 +494,8 @@ void build_ovlp(mm128_v *mmers,
 
       pos0 = (uint32_t)((y0 & 0xFFFFFFFF) >> 1) + 1;
       strand0 = mpv->a[__k0].direction;
-
+      
+      /*
       seq0 = get_read_seq_mmap_ptr(seq_p, rid0, rlmap);
       seq1 = get_read_seq_mmap_ptr(seq_p, rid1, rlmap);
       match = match_seqs(seq0, seq1, 
@@ -328,13 +508,20 @@ void build_ovlp(mm128_v *mmers,
       q_end = match->q_end;
       t_bgn = match->t_bgn;
       t_end = match->t_end;
-      printf("%d %d %d %d %d %d %d %d %d %d\n", 
-              rid0, pos0, strand0, 
-              rid1, pos1, strand1,
-              q_bgn, q_end,
-              t_bgn, t_end);  
-      set_rid_pair(rid_pairs, rid0, rid1);
-      free_ovlp_match(match);
+      */
+      ovlp_candidate_t candidate;
+      candidate.rid0 = rid0;
+      candidate.rid1 = rid1;
+      candidate.strand1 = strand1;
+      candidate.len0 = rlen0;
+      candidate.d_left = (int32_t) pos0 - (int32_t) pos1;
+      candidate.d_right = (int32_t) pos0 - (int32_t) pos1 + (int32_t) rlen1 - (int32_t) rlen0;
+      push_ovlp_candidate(ovlp_candidates, &candidate);
+      //printf("%d %d %d %d %d %d\n", 
+      //        rid0, pos0, strand0, 
+      //        rid1, pos1, strand1);
+      increase_rid_pair_count(rid_pairs, rid0, rid1);
+      //free_ovlp_match(match);
     }
     mmer0 = mmer1;
   }
@@ -348,185 +535,6 @@ int mp128_comp(const void *a, const void *b) {
   return ((a0->y0 & 0xFFFFFFFF) >> 1) < ((b0->y0 & 0xFFFFFFFF) >> 1);
 }
 
-void shimmer_to_overlap(mp128_v *mpv, khash_t(RLEN) * rlmap,
-                        khash_t(RPAIR) * rid_pairs, uint8_t bestn,
-                        uint32_t align_bandwidth, uint8_t *seq_p,
-                        FILE *output) {
-  uint64_t ridp;
-  uint64_t y0;
-  uint32_t rid0, pos0, rlen0, strand0;
-  uint32_t rid1, pos1, rlen1, strand1;
-  uint32_t right_ext = 0;
-  khiter_t k;
-  uint8_t *seq0 = NULL;
-  uint8_t *seq1 = NULL;
-  int32_t absent;
-  uint8_t *contained;
-
-  contained = (uint8_t *)calloc(
-      mpv->n, sizeof(uint8_t));  // use calloc to set element to zero
-
-  // clock_t time_begin = clock();
-  // clock_t time_end;
-
-  for (size_t __k0 = (mpv->n) - 1; __k0 > 0;
-       __k0--) {  // note: k0 is an unsigned type
-    if (contained[__k0 - 1] == 1) continue;
-    y0 = mpv->a[__k0 - 1].y0;
-    rid0 = (uint32_t)(y0 >> 32);
-    pos0 = (uint32_t)((y0 & 0xFFFFFFFF) >> 1) + 1;
-    k = kh_get(RLEN, rlmap, rid0);
-    assert(k != kh_end(rlmap));
-    rlen0 = kh_val(rlmap, k).len;
-    strand0 = mpv->a[__k0 - 1].direction;
-    seq0 = get_read_seq_mmap_ptr(seq_p, rid0, rlmap);
-
-    if (right_ext == 0) {
-      right_ext = rlen0;
-    }
-
-    size_t overlap_count = 0;
-    for (size_t __k1 = 1; (__k0 + __k1 - 1 < mpv->n) && (overlap_count < bestn);
-         __k1++) {
-      if (contained[__k0 + __k1 - 1] == 1) continue;
-
-      y0 = mpv->a[__k0 + __k1 - 1].y0;
-      rid1 = (uint32_t)(y0 >> 32);
-
-      if (rid0 == rid1) continue;
-      // time_end = clock();
-      // printf("X0: %lu %lu %lu %lu %09u %09u %lu\n", mpv->n, __k0, __k1,
-      // overlap_count, rid0, rid1, time_end-time_begin); time_begin = time_end;
-      ridp = rid0 < rid1 ? (((uint64_t)rid0) << 32) | ((uint64_t)rid1)
-                         : (((uint64_t)rid1) << 32) | ((uint64_t)rid0);
-      k = kh_get(RPAIR, rid_pairs, ridp);
-      if (k != kh_end(rid_pairs)) {
-        if (kh_val(rid_pairs, k) == OVERLAP) overlap_count += 1;
-        continue;
-      }
-      pos1 = (uint32_t)((y0 & 0xFFFFFFFF) >> 1) + 1;
-      assert(pos0 - pos1 >= 0);
-      k = kh_get(RLEN, rlmap, rid1);
-      assert(k != kh_end(rlmap));
-      rlen1 = kh_val(rlmap, k).len;
-      strand1 = mpv->a[__k0 + __k1 - 1].direction;
-      seq1 = get_read_seq_mmap_ptr(seq_p, rid1, rlmap);
-
-      // printf("X1: %lu %lu %lu %lu %09u %09u\n", mpv->n, __k0, __k1,
-      // overlap_count, rid0, rid1);
-
-      // printf("%09d %s\n%09d %s\n",rid0, seq0+pos0-pos1,rid1, seq1);
-      uint32_t slen0 = rlen0 - pos0 + pos1;
-      uint32_t slen1 = rlen1;
-      ovlp_match_t *match;
-      match = ovlp_match(seq0 + pos0 - pos1, slen0, strand0, seq1, slen1,
-                         strand1, align_bandwidth);
-      seq_coor_t q_bgn, q_end, t_bgn, t_end;
-      q_bgn = match->q_bgn;
-      q_end = match->q_end;
-      t_bgn = match->t_bgn;
-      t_end = match->t_end;
-      // printf("X2: %u %u %d %d %d %d\n", pos0, pos1, q_bgn, q_end, t_bgn,
-      // t_end);
-
-      if ((q_bgn < READ_END_FUZZINESS && t_bgn < READ_END_FUZZINESS &&
-           (abs((int64_t) slen0 - (int64_t) q_end) < READ_END_FUZZINESS ||
-            abs((int64_t) slen1 - (int64_t) t_end) < READ_END_FUZZINESS)) &&
-          q_end > 500 && t_end > 500) {
-        // printf("X3: %u %u %d %d %d %d\n", pos0, pos1, q_bgn, q_end, t_bgn,
-        // t_end); printf("%s\n%s\n", seq0+pos0-pos1, seq1);
-
-        uint8_t ovlp_type;
-        if (abs((int64_t) rlen0 - ( (int64_t) q_end - (int64_t) q_bgn)) < READ_END_FUZZINESS * 2 ||
-            abs((int64_t) rlen1 - ( (int64_t) t_end - (int64_t) t_bgn)) < READ_END_FUZZINESS * 2) {
-          if (rlen0 >= rlen1) {
-            k = kh_put(RPAIR, rid_pairs, ridp, &absent);
-            kh_val(rid_pairs, k) = CONTAINS;
-            ovlp_type = CONTAINS;
-            contained[__k0 + __k1 - 1] = 1;
-          } else {
-            k = kh_put(RPAIR, rid_pairs, ridp, &absent);
-            kh_val(rid_pairs, k) = CONTAINED;
-            ovlp_type = CONTAINED;
-            contained[__k0 - 1] = 1;
-          }
-        } else {
-          overlap_count++;
-          k = kh_put(RPAIR, rid_pairs, ridp, &absent);
-          kh_val(rid_pairs, k) = OVERLAP;
-          ovlp_type = OVERLAP;
-        }
-        assert(absent == 1);
-
-        ovlp_t ovlp;
-        ovlp.y0 = mpv->a[__k0 - 1].y0;
-        ovlp.y1 = mpv->a[__k0 + __k1 - 1].y0;
-        ovlp.rl0 = rlen0;
-        ovlp.rl1 = rlen1;
-        ovlp.strand0 = strand0;
-        ovlp.strand1 = strand1;
-        ovlp.ovlp_type = ovlp_type;
-        ovlp.match = *match;
-
-        fwrite(&ovlp, sizeof(ovlp_t), 1, output);
-      }
-      free_ovlp_match(match);
-      if (contained[__k0 - 1] == 1) break;
-    }
-  }
-  free(contained);
-}
-
-void process_overlaps(char *seqdb_file_path, khash_t(MMER0) * mmer0_map,
-                      khash_t(RLEN) * rlmap, khash_t(MMC) * mcmap,
-                      uint8_t bestn, uint32_t ovlp_upper,
-                      uint32_t align_bandwidth, FILE *ovlp_file) {
-  int fd;
-  struct stat sb;
-  uint8_t *seq_p;
-  mp128_v *mpv;
-  // uint64_t mhash0, mhash1;
-
-  khash_t(MMER1) * mmer1_map;
-
-  fd = open(seqdb_file_path, O_RDONLY);
-  if (fd == -1) handle_error("open");
-
-  if (fstat(fd, &sb) == -1) /* To obtain file size */
-    handle_error("fstat");
-
-  seq_p = (uint8_t *)mmap((void *)0, sb.st_size, PROT_READ, MAP_SHARED, fd, 0);
-
-  khash_t(RPAIR) *rid_pairs = kh_init(RPAIR);
-  uint32_t iter_count = 0;
-  clock_t begin = clock();
-  clock_t end;
-  for (khiter_t __i = kh_begin(mmer0_map); __i != kh_end(mmer0_map); ++__i) {
-    if (!kh_exist(mmer0_map, __i)) continue;
-    // mhash0 = kh_key(mmer0_map, __i);
-    // mhash0 >>= 8;
-    mmer1_map = kh_val(mmer0_map, __i);
-    for (khiter_t __j = kh_begin(mmer1_map); __j != kh_end(mmer1_map); ++__j) {
-      if (!kh_exist(mmer1_map, __j)) continue;
-      // mhash1 = kh_key(mmer1_map, __j);
-      // mhash1 >>= 8;
-      mpv = kh_val(mmer1_map, __j);
-      if (mpv->n <= 2 || mpv->n > ovlp_upper) continue;
-      qsort(mpv->a, mpv->n, sizeof(mp128_t), mp128_comp);
-      shimmer_to_overlap(mpv, rlmap, rid_pairs, bestn, align_bandwidth, seq_p,
-                         ovlp_file);
-      iter_count++;
-      if (iter_count % 10000 == 0) {
-        end = clock();
-        fprintf(stderr, "iter_count: %d, %f s for 10000 candidates\n",
-                iter_count, (double)(end - begin) / CLOCKS_PER_SEC);
-        begin = end;
-      }
-    }
-  }
-  kh_destroy(RPAIR, rid_pairs);
-  munmap(seq_p, sb.st_size);
-}
 
 int main(int argc, char *argv[]) {
   char *seqdb_prefix = NULL;
@@ -703,17 +711,13 @@ int main(int argc, char *argv[]) {
   if (fstat(fd, &sb) == -1) /* To obtain file size */
     handle_error("fstat");
 
-  seq_p = (uint8_t *)mmap((void *)0, sb.st_size, PROT_READ, MAP_SHARED, fd, 0);
 
-  build_ovlp(&mmers, mmer0_map, rlmap, mcmap, 
-             mychunk, total_chunk, mc_lower,
-             mc_upper,
-             seq_p);
-  munmap(seq_p, sb.st_size);
-/*
-  process_overlaps(seqdb_file_path, mmer0_map, rlmap, mcmap, bestn, ovlp_upper,
-                   align_bandwidth, ovlp_file);
-*/
+  khash_t(OVLP_CANDIDATES) * ovlp_candidates = kh_init(OVLP_CANDIDATES);
+  build_ovlp_candidates(&mmers, mmer0_map, rlmap, mcmap, 
+                        mychunk, total_chunk, mc_lower,
+                        mc_upper,
+                        ovlp_candidates);
+
   for (khiter_t __i = kh_begin(mmer0_map); __i != kh_end(mmer0_map); ++__i) {
     if (!kh_exist(mmer0_map, __i)) continue;
     mmer1_map = kh_val(mmer0_map, __i);
@@ -727,8 +731,17 @@ int main(int argc, char *argv[]) {
 
   kh_destroy(MMER0, mmer0_map);
   kh_destroy(MMC, mcmap);
-  kh_destroy(RLEN, rlmap);
   kv_destroy(mmers);
+
+
+  seq_p = (uint8_t *)mmap((void *)0, sb.st_size, PROT_READ, MAP_SHARED, fd, 0);
+  dump_candidates(ovlp_candidates, rlmap, seq_p);
+  munmap(seq_p, sb.st_size);
+/*
+  process_overlaps(seqdb_file_path, mmer0_map, rlmap, mcmap, bestn, ovlp_upper,
+                   align_bandwidth, ovlp_file);
+*/
+  kh_destroy(RLEN, rlmap);
   fclose(ovlp_file);
   if (!seqdb_prefix) free(seqdb_prefix);
   if (!shimmer_prefix) free(shimmer_prefix);
