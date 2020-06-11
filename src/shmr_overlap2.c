@@ -315,7 +315,16 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
       ovlp_candidate_t c;
       c = v->a[i];
       if (c.d_right >= 0) continue;
+
+      k = kh_get(RLEN, rlmap, c.rid1);
+      assert(k != kh_end(rlmap));
+      rlen1 = kh_val(rlmap, k).len;
+
       seq1 = get_read_seq_mmap_ptr(seq_p, c.rid1, rlmap);
+      
+      k = kh_get(RLEN, rlmap, c.rid1);
+      assert(k != kh_end(rlmap));
+      rlen1 = kh_val(rlmap, k).len;
       match = match_seqs(seq0, seq1, 
                          c.d_left,
                          rlen0, rlen1, 
@@ -339,10 +348,10 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
             c.len0,
             c.d_left,
             c.d_right,
-            c.d_left + q_bgn,
-            t_bgn,
-            c.d_left + q_end,
-            t_end,
+            q_bgn,
+            abs(c.d_left) + t_bgn,
+            q_end,
+            abs(c.d_left) + t_end,
             err_est);
       free_ovlp_match(match);
       if (ovlp_count > 5) break;
@@ -437,21 +446,6 @@ void build_ovlp_candidates(mm128_v *mmers,
       pos0 = (uint32_t)((y0 & 0xFFFFFFFF) >> 1) + 1;
       strand0 = mpv->a[__k0].direction;
 
-      /*
-      seq0 = get_read_seq_mmap_ptr(seq_p, rid0, rlmap);
-      seq1 = get_read_seq_mmap_ptr(seq_p, rid1, rlmap);
-      match = match_seqs(seq0, seq1, 
-                         pos0, pos1, 
-                         rlen0, rlen1, 
-                         strand0, strand1);
-      
-      
-      seq_coor_t q_bgn, q_end, t_bgn, t_end;
-      q_bgn = match->q_bgn;
-      q_end = match->q_end;
-      t_bgn = match->t_bgn;
-      t_end = match->t_end;
-      */
       ovlp_candidate_t candidate;
       candidate.rid0 = rid0;
       candidate.rid1 = rid1;
@@ -460,11 +454,7 @@ void build_ovlp_candidates(mm128_v *mmers,
       candidate.d_left = (int32_t) pos0 - (int32_t) pos1;
       candidate.d_right = (int32_t) pos0 - (int32_t) pos1 + (int32_t) rlen1 - (int32_t) rlen0;
       push_ovlp_candidate(ovlp_candidates, &candidate);
-      //printf("%d %d %d %d %d %d\n", 
-      //        rid0, pos0, strand0, 
-      //        rid1, pos1, strand1);
       increase_rid_pair_count(rid_pairs, rid0, rid1);
-      //free_ovlp_match(match);
     }
 
     // reverse
@@ -495,20 +485,6 @@ void build_ovlp_candidates(mm128_v *mmers,
       pos0 = (uint32_t)((y0 & 0xFFFFFFFF) >> 1) + 1;
       strand0 = mpv->a[__k0].direction;
       
-      /*
-      seq0 = get_read_seq_mmap_ptr(seq_p, rid0, rlmap);
-      seq1 = get_read_seq_mmap_ptr(seq_p, rid1, rlmap);
-      match = match_seqs(seq0, seq1, 
-                         pos0, pos1, 
-                         rlen0, rlen1, 
-                         strand0, strand1);
-
-      seq_coor_t q_bgn, q_end, t_bgn, t_end;
-      q_bgn = match->q_bgn;
-      q_end = match->q_end;
-      t_bgn = match->t_bgn;
-      t_end = match->t_end;
-      */
       ovlp_candidate_t candidate;
       candidate.rid0 = rid0;
       candidate.rid1 = rid1;
@@ -517,11 +493,7 @@ void build_ovlp_candidates(mm128_v *mmers,
       candidate.d_left = (int32_t) pos0 - (int32_t) pos1;
       candidate.d_right = (int32_t) pos0 - (int32_t) pos1 + (int32_t) rlen1 - (int32_t) rlen0;
       push_ovlp_candidate(ovlp_candidates, &candidate);
-      //printf("%d %d %d %d %d %d\n", 
-      //        rid0, pos0, strand0, 
-      //        rid1, pos1, strand1);
       increase_rid_pair_count(rid_pairs, rid0, rid1);
-      //free_ovlp_match(match);
     }
     mmer0 = mmer1;
   }
