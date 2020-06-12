@@ -26,7 +26,7 @@ extern int optind, opterr, optopt;
   } while (0)
 
 #define MMER_COUNT_LOWER_BOUND 2
-#define MMER_COUNT_UPPER_BOUND 240
+#define MMER_COUNT_UPPER_BOUND 4096
 #ifndef ORIGINAL
 #define ORIGINAL 0
 #endif
@@ -34,8 +34,8 @@ extern int optind, opterr, optopt;
 #define REVERSED 1
 #endif
 #define READ_END_FUZZINESS 48
-#define LOCAL_OVERLAP_UPPERBOUND 120
-#define BESTN 4
+#define LOCAL_OVERLAP_UPPERBOUND 0
+#define BESTN 5
 #define OVERLAP 0
 #define CONTAINS 1
 #define CONTAINED 2
@@ -234,19 +234,24 @@ bool check_match(ovlp_match_t *match, uint32_t slen0, uint32_t slen1) {
   q_end = match->q_end;
   t_bgn = match->t_bgn;
   t_end = match->t_end;
+  //printf("check_match: %d %d %d %d %d %d\n", q_bgn, q_end, slen0, t_bgn, t_end, slen1);
   if (q_end < 500 || t_end < 500)  return false;
   double err_est;
   err_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size);
   if (err_est < 97) return false;;
 
   if (q_bgn > READ_END_FUZZINESS || t_bgn > READ_END_FUZZINESS) return false; 
-  if ((abs((int64_t) (slen0) - (int64_t) q_end) < READ_END_FUZZINESS) ||  
-      (abs((int64_t) (slen1) - (int64_t) t_end) < READ_END_FUZZINESS)) return false;
+  if ((abs((int64_t) (slen0) - (int64_t) q_end) > READ_END_FUZZINESS) &&  
+      (abs((int64_t) (slen1) - (int64_t) t_end) > READ_END_FUZZINESS)) return false;
   return true;
 }
 
+KHASH_MAP_INIT_INT(MRID, uint32_t);
+
 void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
                      khash_t(RLEN) * rlmap,
+                     uint32_t ovlp_upper,
+                     uint32_t bestn,
                      uint8_t *seq_p) {
   ovlp_candidate_v * v;
   uint32_t rlen0,  rlen1;
@@ -255,11 +260,21 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
   uint8_t *seq1 = NULL;
   khiter_t k;
   ovlp_match_t *match;
+
   for (khiter_t __i = kh_begin(ovlp_candidates); 
          __i != kh_end(ovlp_candidates); 
          ++__i) {
+
+    khash_t(MRID) *mrid = kh_init(MRID);
+    int32_t absent;
+
     if (!kh_exist(ovlp_candidates, __i)) continue;
     v = kh_val(ovlp_candidates, __i);
+
+    if (ovlp_upper != 0) {
+      if (v->n > ovlp_upper) continue;
+    }
+
     rid0 = v->a[0].rid0;
     k = kh_get(RLEN, rlmap, rid0);
     assert(k != kh_end(rlmap));
@@ -271,6 +286,9 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
       ovlp_candidate_t c;
       c = v->a[i];
       if (c.d_left <= 0) continue;
+
+      k = kh_get(MRID, mrid, c.rid1);
+      if (k != kh_end(mrid)) continue;
 
       k = kh_get(RLEN, rlmap, c.rid1);
       assert(k != kh_end(rlmap));
@@ -284,7 +302,7 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
       if (check_match(match, rlen0 - c.d_left, rlen1) == false) {
           free_ovlp_match(match);
           continue;
-      }       
+      } 
       seq_coor_t q_bgn, q_end, t_bgn, t_end;
       q_bgn = match->q_bgn;
       q_end = match->q_end;
@@ -302,12 +320,16 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
             c.d_left,
             c.d_right,
             c.d_left + q_bgn,
-            t_bgn,
             c.d_left + q_end,
+            t_bgn,
             t_end,
             err_est);
       free_ovlp_match(match);
-      if (ovlp_count > 5) break;
+
+      k = kh_put(MRID, mrid, c.rid1, &absent);
+      kh_val(mrid, k) = 1;
+
+      if (ovlp_count > bestn) break;
     }
     qsort(v->a, v->n, sizeof(ovlp_candidate_t), ovlp_comp_right);
     ovlp_count=0;
@@ -315,6 +337,9 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
       ovlp_candidate_t c;
       c = v->a[i];
       if (c.d_right >= 0) continue;
+
+      k = kh_get(MRID, mrid, c.rid1);
+      if (k != kh_end(mrid)) continue;
 
       k = kh_get(RLEN, rlmap, c.rid1);
       assert(k != kh_end(rlmap));
@@ -349,13 +374,18 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
             c.d_left,
             c.d_right,
             q_bgn,
-            abs(c.d_left) + t_bgn,
             q_end,
+            abs(c.d_left) + t_bgn,
             abs(c.d_left) + t_end,
             err_est);
       free_ovlp_match(match);
-      if (ovlp_count > 5) break;
+
+      k = kh_put(MRID, mrid, c.rid1, &absent);
+      kh_val(mrid, k) = 1;
+
+      if (ovlp_count > bestn) break;
     }
+    kh_destroy(MRID, mrid);
   }
 }
 
@@ -520,7 +550,7 @@ int main(int argc, char *argv[]) {
   char seq_idx_file_path[8192];
   char seqdb_file_path[8291];
   int c;
-  uint8_t bestn = BESTN;
+  uint32_t bestn = BESTN;
   uint32_t mc_lower = MMER_COUNT_LOWER_BOUND;
   uint32_t mc_upper = MMER_COUNT_UPPER_BOUND;
   uint32_t ovlp_upper = LOCAL_OVERLAP_UPPERBOUND;
@@ -686,8 +716,8 @@ int main(int argc, char *argv[]) {
 
   khash_t(OVLP_CANDIDATES) * ovlp_candidates = kh_init(OVLP_CANDIDATES);
   build_ovlp_candidates(&mmers, mmer0_map, rlmap, mcmap, 
-                        mychunk, total_chunk, mc_lower,
-                        mc_upper,
+                        mychunk, total_chunk, 
+                        mc_lower, mc_upper, 
                         ovlp_candidates);
 
   for (khiter_t __i = kh_begin(mmer0_map); __i != kh_end(mmer0_map); ++__i) {
@@ -707,12 +737,16 @@ int main(int argc, char *argv[]) {
 
 
   seq_p = (uint8_t *)mmap((void *)0, sb.st_size, PROT_READ, MAP_SHARED, fd, 0);
-  dump_candidates(ovlp_candidates, rlmap, seq_p);
+  dump_candidates(ovlp_candidates, rlmap, ovlp_upper, bestn, seq_p);
   munmap(seq_p, sb.st_size);
-/*
-  process_overlaps(seqdb_file_path, mmer0_map, rlmap, mcmap, bestn, ovlp_upper,
-                   align_bandwidth, ovlp_file);
-*/
+
+  for (khiter_t __i = kh_begin(ovlp_candidates); __i != kh_end(ovlp_candidates); ++__i) {
+    if (!kh_exist(ovlp_candidates, __i)) continue;
+    ovlp_candidate_v *v = kh_val(ovlp_candidates, __i);
+    kv_destroy(*v);
+  }
+  kh_destroy(OVLP_CANDIDATES, ovlp_candidates);
+
   kh_destroy(RLEN, rlmap);
   fclose(ovlp_file);
   if (!seqdb_prefix) free(seqdb_prefix);
