@@ -126,7 +126,9 @@ void build_map2(mm128_v *mmers, khash_t(MMER0) * mmer0_map,
   }
 }
 
-mp128_v * match_shimmer_pair(khash_t(MMER0) * mmer0_map, mm128_t mmer0,mm128_t mmer1) {
+mp128_v * match_shimmer_pair(khash_t(MMER0) * mmer0_map, 
+                             mm128_t mmer0,
+                             mm128_t mmer1) {
   khiter_t k;
   mp128_v *mpv;
   khash_t(MMER1) * mmer1_map;
@@ -682,14 +684,31 @@ int main(int argc, char *argv[]) {
   assert(written < sizeof(mmc_file_path));
   wordexp(mmc_file_path, &p, 0);
   mmc_fns = p.we_wordv;
+
+  uint32_t *mc_bin;
+  mc_bin = calloc(512, sizeof(uint32_t));
   for (int i = 0; i < p.we_wordc; i++) {
     fprintf(stderr, "using shimmer count file: %s\n", mmc_fns[i]);
     mmc = read_mm_count(mmc_fns[i]);
+    for (uint32_t j=0; j < mmc.n; j++) {
+      if (mmc.a[j].count > 511) {
+          mc_bin[511] += 1;
+      } else {
+          mc_bin[mmc.a[j].count-1]++;
+      }
+    }
+
     aggregate_mm_count(mcmap, &mmc);
     kv_destroy(mmc);
   }
-
   wordfree(&p);
+  
+  fprintf(stderr, "shimmer count histogram\n");
+  for (uint32_t j=0; j < 512; j++) {
+    fprintf(stderr, "%10d %d", j+1, mc_bin[j]);
+    fprintf(stderr, "\n");
+  }
+  free(mc_bin);
 
   ovlp_file = fopen(ovlp_file_path, "w");
 
