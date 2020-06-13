@@ -97,7 +97,7 @@ void build_map2(mm128_v *mmers, khash_t(MMER0) * mmer0_map,
       continue;
     }
 
-      // don't use two minimers that are too close to each other
+    // don't use two minimers that are too close to each other
     if (((mmer1.y >> 1) & 0xFFFFFFF) - ((mmer0.y >> 1) & 0xFFFFFFF) < 100) {
       mmer0 = mmer1;
       continue;
@@ -254,7 +254,8 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
                      khash_t(RLEN) * rlmap,
                      uint32_t ovlp_upper,
                      uint32_t bestn,
-                     uint8_t *seq_p) {
+                     uint8_t *seq_p,
+                     FILE * ovlp_file) {
   ovlp_candidate_v * v;
   uint32_t rlen0,  rlen1;
   uint32_t rid0;
@@ -314,18 +315,19 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
       if (c.d_right > 2500) ovlp_count++;
       double err_est;
       err_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size);
-      printf("%d %d %d %d %d %d %d %d %d %d %0.2f\n",
-            c.rid0,
-            c.rid1,
-            c.strand1,
-            c.len0,
-            c.d_left,
-            c.d_right,
-            c.d_left + q_bgn,
-            c.d_left + q_end,
-            t_bgn,
-            t_end,
-            err_est);
+      fprintf(ovlp_file,
+             "%d %d %d %d %d %d %d %d %d %d %0.2f\n",
+             c.rid0,
+             c.rid1,
+             c.strand1,
+             c.len0,
+             c.d_left,
+             c.d_right,
+             c.d_left + q_bgn,
+             c.d_left + q_end,
+             t_bgn,
+             t_end,
+             err_est);
       free_ovlp_match(match);
 
       k = kh_put(MRID, mrid, c.rid1, &absent);
@@ -368,18 +370,19 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
       if (c.d_left < -2500) ovlp_count++;
       double err_est;
       err_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size);
-      printf("%d %d %d %d %d %d %d %d %d %d %0.2f\n",
-            c.rid0,
-            c.rid1,
-            c.strand1,
-            c.len0,
-            c.d_left,
-            c.d_right,
-            q_bgn,
-            q_end,
-            abs(c.d_left) + t_bgn,
-            abs(c.d_left) + t_end,
-            err_est);
+      fprintf(ovlp_file,
+              "%d %d %d %d %d %d %d %d %d %d %0.2f\n",
+              c.rid0,
+              c.rid1,
+              c.strand1,
+              c.len0,
+              c.d_left,
+              c.d_right,
+              q_bgn,
+              q_end,
+              abs(c.d_left) + t_bgn,
+              abs(c.d_left) + t_end,
+              err_est);
       free_ovlp_match(match);
 
       k = kh_put(MRID, mrid, c.rid1, &absent);
@@ -756,7 +759,7 @@ int main(int argc, char *argv[]) {
 
 
   seq_p = (uint8_t *)mmap((void *)0, sb.st_size, PROT_READ, MAP_SHARED, fd, 0);
-  dump_candidates(ovlp_candidates, rlmap, ovlp_upper, bestn, seq_p);
+  dump_candidates(ovlp_candidates, rlmap, ovlp_upper, bestn, seq_p, ovlp_file);
   munmap(seq_p, sb.st_size);
 
   for (khiter_t __i = kh_begin(ovlp_candidates); __i != kh_end(ovlp_candidates); ++__i) {
