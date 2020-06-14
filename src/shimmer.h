@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include "khash.h"
 #include "kvec.h"
 
