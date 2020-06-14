@@ -161,7 +161,7 @@ def stiching_reads(tiling_path_data, seqdb, ovlps):
         offset2 = slen1 - abs(e-s) - stitching_overhang_size
         match = shimmer4py.ovlp_match(bseq0[offset1:], slen0 - offset1, strand0,
                                bseq1[offset2:], slen1 - offset2, strand1,
-                               100)
+                               100, False)
 
         if strand1 == 1:
             s, e = slen1 - s, slen1 - e
