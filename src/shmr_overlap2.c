@@ -102,6 +102,13 @@ void build_map2(mm128_v *mmers, khash_t(MMER0) * mmer0_map,
       mmer0 = mmer1;
       continue;
     }
+
+    // DEBUG
+    //if ( (mmer0.y >> 32) == 1446606 ) {
+    //   printf("%d %d %d\n", mmer0.y >> 32, ((mmer0.y >> 1) & 0xFFFFFFF), mcount);
+    //}
+    // END
+
     // build the index for reads in the chunk
     k = kh_put(MMER0, mmer0_map, mmer0.x, &absent);
     if (absent) kh_value(mmer0_map, k) = kh_init(MMER1);
@@ -186,12 +193,12 @@ ovlp_match_t * match_seqs(uint8_t * seq0, uint8_t * seq1,
       if (d_left > 0 ) {
         match = ovlp_match(seq0 + d_left, rlen0 - d_left, ORIGINAL, 
                            seq1, rlen1, strand1, 
-                           align_bandwidth);
+                           align_bandwidth, true);
       } else {
         d_left = abs(d_left);
         match = ovlp_match(seq0, rlen0, ORIGINAL, 
                            seq1 + d_left, rlen1 - d_left, strand1, 
-                           align_bandwidth);
+                           align_bandwidth, true);
       }
       return match;
 }
@@ -240,7 +247,7 @@ bool check_match(ovlp_match_t *match, uint32_t slen0, uint32_t slen1) {
   if (q_end < 500 || t_end < 500)  return false;
   double err_est;
   err_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size);
-  if (err_est < 97) return false;;
+  if (err_est < 99.8) return false;;
 
   if (q_bgn > READ_END_FUZZINESS || t_bgn > READ_END_FUZZINESS) return false; 
   if ((abs((int64_t) (slen0) - (int64_t) q_end) > READ_END_FUZZINESS) &&  

@@ -122,7 +122,7 @@ void shimmer_to_overlap(mp128_v *mpv, khash_t(RLEN) * rlmap,
       uint32_t slen1 = rlen1;
       ovlp_match_t *match;
       match = ovlp_match(seq0 + pos0 - pos1, slen0, strand0, seq1, slen1,
-                         strand1, align_bandwidth);
+                         strand1, align_bandwidth, false);
       seq_coor_t q_bgn, q_end, t_bgn, t_end;
       q_bgn = match->q_bgn;
       q_end = match->q_end;

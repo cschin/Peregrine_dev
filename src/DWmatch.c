@@ -63,9 +63,74 @@
 #include <stdlib.h>
 #include "shimmer.h"
 
+typedef struct {
+  uint32_t l;  // length
+  uint32_t m;  // allocated length
+  char * s;  // sequence
+} seq_t;
+
+typedef struct {
+  uint32_t l;  // length
+  uint32_t m;  // allocated length
+  char * s;  // sequence
+  uint32_t * p;  // position map
+} hpc_seq_t;
+
+
+seq_t * allocate_seq(uint32_t m) {
+  seq_t * out;
+  out = calloc(1, sizeof(seq_t));
+  out->m = m;
+  out->l = 0;
+  out->s = calloc(m, sizeof(char));
+  return out;
+}
+
+void free_seq(seq_t * seq) {
+  free(seq->s);
+  free(seq);
+}
+
+hpc_seq_t * allocate_hpc_seq(uint32_t m) {
+  hpc_seq_t * out;
+  out = calloc(1, sizeof(hpc_seq_t));
+  out->m = m;
+  out->l = 0;
+  out->s = calloc(m, sizeof(char));
+  out->p = calloc(m, sizeof(uint32_t));
+  return out;
+}
+
+void free_hpc_seq(hpc_seq_t * cseq) {
+  free(cseq->s);
+  free(cseq->p);
+  free(cseq);
+}
+
+hpc_seq_t * hp_compress(seq_t * seq) {
+  assert(seq->l > 0);
+  hpc_seq_t * cseq;  //homopolymer compressed seq
+  char c = seq->s[0];
+  size_t j = 0;
+  cseq = allocate_hpc_seq(seq->l);
+  cseq->s[0] = c;
+  cseq->p[0] = 0;
+  for (size_t i = 1; i < seq->l; i++) {
+    if (seq->s[i] != c) {
+      c = seq->s[i];
+      j++;
+      cseq->s[j] = c;
+      cseq->p[j] = i;
+    }
+  }
+  cseq->l = j;
+  return cseq;
+}
+
 ovlp_match_t *ovlp_match(uint8_t *query_seq, seq_coor_t q_len, uint8_t q_strand,
                          uint8_t *target_seq, seq_coor_t t_len,
-                         uint8_t t_strand, seq_coor_t band_tolerance) {
+                         uint8_t t_strand, seq_coor_t band_tolerance,
+                         bool use_hpc) {
   seq_coor_t *V;
   seq_coor_t *U;  // array of matched bases for each "k"
   seq_coor_t k_offset;
@@ -78,20 +143,54 @@ ovlp_match_t *ovlp_match(uint8_t *query_seq, seq_coor_t q_len, uint8_t q_strand,
   seq_coor_t x1, y1;
   seq_coor_t max_d;
   seq_coor_t band_size;
+  seq_t *qseq; // local queery seq
+  seq_t *tseq; // local questy seq
+  hpc_seq_t *qseq_hc;
+  hpc_seq_t *tseq_hc;
+  char *s0;
+  char *s1;
 
   uint8_t q_shift = 0;
   uint8_t t_shift = 0;
+
+  qseq = allocate_seq(q_len);
+  qseq->l = q_len;
+  memcpy(qseq->s, query_seq, q_len);
+  q_shift = q_strand == 0 ? 0 : 4;
+  for (size_t i=0; i < q_len; i++) {
+    qseq->s[i] = (qseq->s[i] >> q_shift) & 0x0F;
+  }
+
+  tseq = allocate_seq(t_len);
+  tseq->l = t_len;
+  memcpy(tseq->s, target_seq, t_len);
+  t_shift = t_strand == 0 ? 0 : 4;
+  for (size_t i=0; i < t_len; i++) {
+    tseq->s[i] = (tseq->s[i] >> t_shift) & 0x0F;
+  }
+  
+  if (use_hpc) {
+    qseq_hc = hp_compress(qseq);
+    tseq_hc = hp_compress(tseq);
+
+    s0 = qseq_hc->s;
+    s1 = tseq_hc->s;
+    q_len = qseq_hc->l;
+    t_len = tseq_hc->l;
+  } else {
+    s0 = qseq->s;
+    s1 = tseq->s;
+    q_len = qseq->l;
+    t_len = qseq->l;
+  }
+
 
   bool start = false;
 
   ovlp_match_t *rtn;
   bool matched = false;
 
-  q_shift = q_strand == 0 ? 0 : 4;
-  t_shift = t_strand == 0 ? 0 : 4;
-
-  // printf("debug: %ld %ld\n", q_len, t_len);
-  // printf("%s\n", query_seq);
+  //printf("debug: %ld %ld\n", q_len, t_len);
 
   max_d = (int)(0.3 * (q_len + t_len));
 
@@ -132,23 +231,31 @@ ovlp_match_t *ovlp_match(uint8_t *query_seq, seq_coor_t q_len, uint8_t q_strand,
       x1 = x;
       y1 = y;
 
-      while (x < q_len && y < t_len &&
-             ((query_seq[x] >> q_shift) & 0x0F) ==
-                 ((target_seq[y] >> t_shift) & 0x0F)) {
+      while (x < q_len && y < t_len && s0[x] == s1[y]) {
         x++;
         y++;
       }
 
       if ((x - x1 > 16) && (start == false)) {
-        rtn->q_bgn = x1;
-        rtn->t_bgn = y1;
+        if (use_hpc) {
+          rtn->q_bgn = qseq_hc->p[x1];
+          rtn->t_bgn = tseq_hc->p[y1];
+        } else {
+          rtn->q_bgn = x1;
+          rtn->t_bgn = y1;
+        }
         start = true;
       }
 
       if ((x - x1 > longest_match)) {
         longest_match = x - x1;
-        rtn->q_m_end = x;
-        rtn->t_m_end = y;
+        if (use_hpc) {
+          rtn->q_m_end = qseq_hc->p[x];
+          rtn->t_m_end = tseq_hc->p[y];
+        } else {
+          rtn->q_m_end = x;
+          rtn->t_m_end = y;
+        }
       }
 
       V[k + k_offset] = x;
@@ -183,8 +290,14 @@ ovlp_match_t *ovlp_match(uint8_t *query_seq, seq_coor_t q_len, uint8_t q_strand,
     min_k = new_min_k - 1;
 
     if (matched == true) {
-      rtn->q_end = x;
-      rtn->t_end = y;
+      //printf("match %d %d %d %d\n", x, y, qseq_hc->p[x], tseq_hc->p[y]);
+      if (use_hpc) {
+        rtn->q_end = qseq_hc->p[x];
+        rtn->t_end = tseq_hc->p[y];
+      } else {
+        rtn->q_end = x;
+        rtn->t_end = y;
+      }
       rtn->dist = d;
       // we don't really generate the alingment path here, so we can only
       // estimate the alignment string size
@@ -198,6 +311,10 @@ ovlp_match_t *ovlp_match(uint8_t *query_seq, seq_coor_t q_len, uint8_t q_strand,
     rtn->t_bgn = 0;
   }
 
+  free_seq(qseq);
+  free_seq(tseq);
+  free_hpc_seq(qseq_hc);
+  free_hpc_seq(tseq_hc);
   free(V);
   free(U);
   return rtn;

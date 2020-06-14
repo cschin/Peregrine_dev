@@ -3,10 +3,11 @@
 
 CC=gcc
 CFLAGS=-O3 
-CFLAGS+=-Wall -Wno-unused-result -Wno-unused-function -Werror -Werror=unused-but-set-variable
+#CFLAGS+=-Wall -Wno-unused-result -Wno-unused-function -Werror -Werror=unused-but-set-variable
+CFLAGS+=-Wall 
 LDLIBS=-lz
 ALL=shmr_mkseqdb shmr_index shmr_gather_mc shmr_overlap shmr_dedup shmr_map shmr_overlap_annotate \
-    shmr_overlap_annotate2
+    shmr_overlap_annotate2 shmr_overlap2
 
 all: $(ALL)
 
@@ -38,6 +39,8 @@ shmr_gather_mc: shmr_gather_mc.o kalloc.o shmr_utils.o
 
 shmr_overlap: shmr_overlap.c shmr_utils.o kalloc.o  DWmatch.o
 
+shmr_overlap2: shmr_overlap2.c shmr_utils.o kalloc.o  DWmatch.o
+
 shmr_map: shmr_map.c shmr_utils.o kalloc.o  DWmatch.o
 
 shmr_dedup: shmr_dedup.c kalloc.o
@@ -53,7 +56,7 @@ install:
 	cp $(ALL) $(BINDIR) 
 
 clean:
-	rm -f shmr_dedup shmr_gather_mc shmr_overlap \
+	rm -f shmr_dedup shmr_gather_mc shmr_overlapi shmr_overlap2	\
 		shmr_map shmr_mkseqdb shmr_index shmr_overlap_annotate \
 		shmr_overlap_annotate2 \
 		shmr_gather_mc *.o *.so; rm -rf ./bin/

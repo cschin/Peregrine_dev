@@ -116,7 +116,7 @@ typedef struct {
 } match_range;
 
 ovlp_match_t *ovlp_match(uint8_t *, seq_coor_t, uint8_t, uint8_t *, seq_coor_t,
-                         uint8_t, seq_coor_t);
+                         uint8_t, seq_coor_t, bool use_hpc);
 
 void free_ovlp_match(ovlp_match_t *);
 
