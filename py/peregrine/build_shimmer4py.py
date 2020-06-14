@@ -24,7 +24,8 @@ ovlp_match_t * ovlp_match(uint8_t * query_seq,
                           uint8_t * target_seq,
                           seq_coor_t t_len,
                           uint8_t t_strand,
-                          seq_coor_t band_tolerance);
+                          seq_coor_t band_tolerance,
+                          bool use_hpc);
 
 void free_ovlp_match(ovlp_match_t * match);
 
