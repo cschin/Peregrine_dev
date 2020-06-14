@@ -31,7 +31,8 @@ jobs:
         run: |
           . /usr/share/miniconda/etc/profile.d/conda.sh
           conda activate peregrine
-          CONDAROOT=/usr/share/miniconda && bash ./install_with_conda.sh
-          python3 -m pip install pytest
+          #CONDAROOT=/usr/share/miniconda && bash ./install_with_conda.sh
+          #python3 -m pip install pytest
+          conda install pytest
           pytest test/
         shell: bash
