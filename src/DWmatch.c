@@ -115,7 +115,9 @@ hpc_seq_t * hp_compress(seq_t * seq) {
   cseq = allocate_hpc_seq(seq->l);
   cseq->s[0] = c;
   cseq->p[0] = 0;
-  for (size_t i = 1; i < seq->l; i++) {
+  uint32_t i = 0;
+  while (i < seq->l) {
+    i ++;
     if (seq->s[i] != c) {
       c = seq->s[i];
       j++;
@@ -313,8 +315,10 @@ ovlp_match_t *ovlp_match(uint8_t *query_seq, seq_coor_t q_len, uint8_t q_strand,
 
   free_seq(qseq);
   free_seq(tseq);
-  free_hpc_seq(qseq_hc);
-  free_hpc_seq(tseq_hc);
+  if (use_hpc) {
+    free_hpc_seq(qseq_hc);
+    free_hpc_seq(tseq_hc);
+  }
   free(V);
   free(U);
   return rtn;
