@@ -32,6 +32,7 @@ jobs:
           . /usr/share/miniconda/etc/profile.d/conda.sh
           conda activate peregrine
           conda info
+          pushd py && python setup.py install && popd
           #CONDAROOT=/usr/share/miniconda && bash ./install_with_conda.sh
           #python3 -m pip install pytest
           conda install pytest
