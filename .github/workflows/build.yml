@@ -29,6 +29,7 @@ jobs:
         shell: bash
       - name: Unit testing
         run: |
+          . /usr/share/miniconda/etc/profile.d/conda
           conda activate peregrine
           python3 -m pip install pytest
           pytest test/
