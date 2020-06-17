@@ -115,13 +115,17 @@ hpc_seq_t * hp_compress(seq_t * seq) {
   cseq = allocate_hpc_seq(seq->l);
   cseq->s[0] = c;
   cseq->p[0] = 0;
-  uint32_t i = 0;
+  size_t i = 0;
   while (i < seq->l) {
     i ++;
-    if (seq->s[i] != c) {
+    if (i < seq->l - 1 && i > 1 && seq->s[i-2] == seq->s[i] && seq->s[i-1] == seq->s[i+1]){
+        i++;
+        continue;
+    }
+    if (seq->s[i] != seq->s[i-1]) {
       c = seq->s[i];
       j++;
-      cseq->s[j] = c;
+      cseq->s[j] = seq->s[i];
       cseq->p[j] = i;
     }
   }
