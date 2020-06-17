@@ -103,12 +103,6 @@ void build_map2(mm128_v *mmers, khash_t(MMER0) * mmer0_map,
       continue;
     }
 
-    // DEBUG
-    //if ( (mmer0.y >> 32) == 1446606 ) {
-    //   printf("%d %d %d\n", mmer0.y >> 32, ((mmer0.y >> 1) & 0xFFFFFFF), mcount);
-    //}
-    // END
-
     // build the index for reads in the chunk
     k = kh_put(MMER0, mmer0_map, mmer0.x, &absent);
     if (absent) kh_value(mmer0_map, k) = kh_init(MMER1);
@@ -188,6 +182,9 @@ ovlp_match_t * match_seqs(uint8_t * seq0, uint8_t * seq1,
                           int32_t d_left, 
                           uint32_t rlen0, uint32_t rlen1,
                           uint32_t strand1) {
+      //printf("DEBUG: d_left:%d rlen1:%d rlen1:%d\n", d_left, rlen0, rlen1);
+      assert(d_left < (int32_t) rlen0);
+      assert(d_left + (int32_t) rlen1 > 0);
       ovlp_match_t *match;
       uint32_t align_bandwidth = 100;
       if (d_left > 0 ) {
@@ -243,7 +240,7 @@ bool check_match(ovlp_match_t *match, uint32_t slen0, uint32_t slen1) {
   q_end = match->q_end;
   t_bgn = match->t_bgn;
   t_end = match->t_end;
-  //printf("check_match: %d %d %d %d %d %d\n", q_bgn, q_end, slen0, t_bgn, t_end, slen1);
+  //printf("DEBUG: check_match: %d %d %d %d %d %d\n", q_bgn, q_end, slen0, t_bgn, t_end, slen1);
   if (q_end < 500 || t_end < 500)  return false;
   double err_est;
   err_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size);
@@ -426,6 +423,7 @@ void build_ovlp_candidates(mm128_v *mmers,
   // uint8_t *seq0 = NULL;
   // uint8_t *seq1 = NULL;
   ovlp_match_t *match;
+  ovlp_candidate_t candidate;
 
   for (;;) {
     if (s >= mmers->n) break;
@@ -461,81 +459,76 @@ void build_ovlp_candidates(mm128_v *mmers,
     }
 
     mpv = match_shimmer_pair(mmer0_map, mmer0, mmer1);
-    if (mpv == NULL) {
-      mmer0 = mmer1;
-      continue; 
-    }
-
-    rid1 = (uint32_t)(mmer0.y >> 32);
-    pos1 = (uint32_t)((mmer0.y & 0xFFFFFFFF) >> 1) + 1;
-    strand1 = ORIGINAL;
-    k = kh_get(RLEN, rlmap, rid1);
-    assert(k != kh_end(rlmap));
-    rlen1 = kh_val(rlmap, k).len;
-    for (size_t __k0 = 0; __k0 <  (mpv->n) ; __k0++) { 
-      uint64_t y0;
-      y0 = mpv->a[__k0].y0;
-      rid0 = (uint32_t)(y0 >> 32);
-      if (rid0 == rid1) {
-          continue;
-      }
-      if (get_rid_pair_count(rid_pairs, rid0, rid1) > 0) continue;
-
-      k = kh_get(RLEN, rlmap, rid0);
+    if (mpv != NULL) {
+      rid1 = (uint32_t)(mmer0.y >> 32);
+      pos1 = (uint32_t)((mmer0.y & 0xFFFFFFFF) >> 1) + 1;
+      k = kh_get(RLEN, rlmap, rid1);
       assert(k != kh_end(rlmap));
-      rlen0 = kh_val(rlmap, k).len;
+      rlen1 = kh_val(rlmap, k).len;
+      strand1 = ORIGINAL;
+      for (size_t __k0 = 0; __k0 <  (mpv->n) ; __k0++) { 
+        uint64_t y0;
+        y0 = mpv->a[__k0].y0;
+        rid0 = (uint32_t)(y0 >> 32);
+        if (rid0 == rid1) {
+            continue;
+        }
+        if (get_rid_pair_count(rid_pairs, rid0, rid1) > 0) continue;
 
-      pos0 = (uint32_t)((y0 & 0xFFFFFFFF) >> 1) + 1;
-      strand0 = mpv->a[__k0].direction;
+        k = kh_get(RLEN, rlmap, rid0);
+        assert(k != kh_end(rlmap));
+        rlen0 = kh_val(rlmap, k).len;
 
-      ovlp_candidate_t candidate;
-      candidate.rid0 = rid0;
-      candidate.rid1 = rid1;
-      candidate.strand1 = strand1;
-      candidate.len0 = rlen0;
-      candidate.d_left = (int32_t) pos0 - (int32_t) pos1;
-      candidate.d_right = (int32_t) pos0 - (int32_t) pos1 + (int32_t) rlen1 - (int32_t) rlen0;
-      push_ovlp_candidate(ovlp_candidates, &candidate);
-      increase_rid_pair_count(rid_pairs, rid0, rid1);
+        pos0 = (uint32_t)((y0 & 0xFFFFFFFF) >> 1) + 1;
+        strand0 = mpv->a[__k0].direction;
+
+        candidate.rid0 = rid0;
+        candidate.rid1 = rid1;
+        candidate.strand1 = strand1;
+        candidate.len0 = rlen0;
+        candidate.d_left = (int32_t) pos0 - (int32_t) pos1;
+        candidate.d_right = (int32_t) pos0 - (int32_t) pos1 + (int32_t) rlen1 - (int32_t) rlen0;
+        push_ovlp_candidate(ovlp_candidates, &candidate);
+        increase_rid_pair_count(rid_pairs, rid0, rid1);
+      }
     }
 
     // reverse
     mpv = match_shimmer_pair(mmer0_map, mmer1, mmer0);
-    if (mpv == NULL) {
-      mmer0 = mmer1;
-      continue; 
-    }
-
-    rid1 = (uint32_t)(mmer1.y >> 32);
-    pos1 = (uint32_t)((mmer1.y & 0xFFFFFFFF) >> 1) + 1;
-    span = mmer1.x & 0xFF;
-    pos1 = rlen1 - pos1 + span - 1;
-    strand1 = REVERSED;
-    for (size_t __k0 = 0; __k0 <  (mpv->n) ; __k0++) { 
-      uint64_t y0;
-      y0 = mpv->a[__k0].y0;
-      rid0 = (uint32_t)(y0 >> 32);
-      if (rid0 == rid1) {
-          continue;
-      }
-      if (get_rid_pair_count(rid_pairs, rid0, rid1) > 0) continue;
-
-      k = kh_get(RLEN, rlmap, rid0);
+    if (mpv != NULL) {
+      rid1 = (uint32_t)(mmer1.y >> 32);
+      k = kh_get(RLEN, rlmap, rid1);
       assert(k != kh_end(rlmap));
-      rlen0 = kh_val(rlmap, k).len;
+      rlen1 = kh_val(rlmap, k).len;
+      pos1 = (uint32_t)((mmer1.y & 0xFFFFFFFF) >> 1) + 1;
+      span = mmer1.x & 0xFF;
+      pos1 = rlen1 - pos1 + span - 1;
+      strand1 = REVERSED;
+      for (size_t __k0 = 0; __k0 <  (mpv->n) ; __k0++) { 
+        uint64_t y0;
+        y0 = mpv->a[__k0].y0;
+        rid0 = (uint32_t)(y0 >> 32);
+        if (rid0 == rid1) {
+          continue;
+        }
+        if (get_rid_pair_count(rid_pairs, rid0, rid1) > 0) continue;
 
-      pos0 = (uint32_t)((y0 & 0xFFFFFFFF) >> 1) + 1;
-      strand0 = mpv->a[__k0].direction;
+        k = kh_get(RLEN, rlmap, rid0);
+        assert(k != kh_end(rlmap));
+        rlen0 = kh_val(rlmap, k).len;
+
+        pos0 = (uint32_t)((y0 & 0xFFFFFFFF) >> 1) + 1;
       
-      ovlp_candidate_t candidate;
-      candidate.rid0 = rid0;
-      candidate.rid1 = rid1;
-      candidate.strand1 = strand1;
-      candidate.len0 = rlen0;
-      candidate.d_left = (int32_t) pos0 - (int32_t) pos1;
-      candidate.d_right = (int32_t) pos0 - (int32_t) pos1 + (int32_t) rlen1 - (int32_t) rlen0;
-      push_ovlp_candidate(ovlp_candidates, &candidate);
-      increase_rid_pair_count(rid_pairs, rid0, rid1);
+        candidate.rid0 = rid0;
+        candidate.rid1 = rid1;
+        candidate.strand1 = strand1;
+        candidate.len0 = rlen0;
+        candidate.d_left = (int32_t) pos0 - (int32_t) pos1;
+        candidate.d_right = (int32_t) pos0 - (int32_t) pos1 + (int32_t) rlen1 - (int32_t) rlen0;
+
+        push_ovlp_candidate(ovlp_candidates, &candidate);
+        increase_rid_pair_count(rid_pairs, rid0, rid1);
+      }
     }
     mmer0 = mmer1;
   }
