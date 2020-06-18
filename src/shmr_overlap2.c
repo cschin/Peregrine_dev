@@ -103,6 +103,12 @@ void build_map2(mm128_v *mmers, khash_t(MMER0) * mmer0_map,
       continue;
     }
 
+    //DEBUG
+    //if ((mmer1.y >> 32) == 985) {
+    //   printf("DEBUG mmcount: %d %d %d\n", mmer1.y >> 32, ((mmer1.y >> 1) & 0xFFFFFFF), mcount);
+    //}
+    //DEBUG END
+
     // build the index for reads in the chunk
     k = kh_put(MMER0, mmer0_map, mmer0.x, &absent);
     if (absent) kh_value(mmer0_map, k) = kh_init(MMER1);
@@ -207,6 +213,11 @@ void push_ovlp_candidate(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
   uint32_t rid0 = candidate->rid0;
   int32_t absent;
   khiter_t k;
+  //DEBUG
+  //if (rid0 == 985) {
+  //    printf("DEBUG X: %d %d %d \n", rid0, candidate->rid1, candidate->d_left);
+  //}
+  //DEBUG END
   k = kh_get(OVLP_CANDIDATES, ovlp_candidates, rid0);
   if (k == kh_end(ovlp_candidates)) {
      k = kh_put(OVLP_CANDIDATES, ovlp_candidates, rid0, &absent);
@@ -225,13 +236,13 @@ void push_ovlp_candidate(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
 int ovlp_comp_left(const void *a, const void *b) {
   ovlp_candidate_t *a0 = (ovlp_candidate_t *)a;
   ovlp_candidate_t *b0 = (ovlp_candidate_t *)b;
-  return abs(a0->d_left) >= abs(b0->d_left);
+  return (a0->rid1) == (b0->rid1) ? abs(a0->d_left) >= abs(b0->d_left) : (a0->rid1) > (b0->rid1);
 }
 
 int ovlp_comp_right(const void *a, const void *b) {
   ovlp_candidate_t *a0 = (ovlp_candidate_t *)a;
   ovlp_candidate_t *b0 = (ovlp_candidate_t *)b;
-  return abs(a0->d_right) >= abs(b0->d_right);
+  return (a0->rid1) == (b0->rid1) ? abs(a0->d_right) >= abs(b0->d_right) : (a0->rid1) > (b0->rid1);
 }
 
 bool check_match(ovlp_match_t *match, uint32_t slen0, uint32_t slen1) {
@@ -240,11 +251,12 @@ bool check_match(ovlp_match_t *match, uint32_t slen0, uint32_t slen1) {
   q_end = match->q_end;
   t_bgn = match->t_bgn;
   t_end = match->t_end;
-  //printf("DEBUG: check_match: %d %d %d %d %d %d\n", q_bgn, q_end, slen0, t_bgn, t_end, slen1);
-  if (q_end < 500 || t_end < 500)  return false;
   double err_est;
-  err_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size);
+  if (match->m_size == 0) return false;
+  err_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size+1);
+  //printf("DEBUG: check_match: %d %d %d %d %d %d %f\n", q_bgn, q_end, slen0, t_bgn, t_end, slen1, err_est);
   if (err_est < 99.8) return false;;
+  if (q_end < 500 || t_end < 500)  return false;
 
   if (q_bgn > READ_END_FUZZINESS || t_bgn > READ_END_FUZZINESS) return false; 
   if ((abs((int64_t) (slen0) - (int64_t) q_end) > READ_END_FUZZINESS) &&  
@@ -278,9 +290,9 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
     if (!kh_exist(ovlp_candidates, __i)) continue;
     v = kh_val(ovlp_candidates, __i);
 
-    if (ovlp_upper != 0) {
-      if (v->n > ovlp_upper) continue;
-    }
+    //if (ovlp_upper != 0) {
+    //   if (v->n > ovlp_upper) continue;
+    //}
 
     rid0 = v->a[0].rid0;
     k = kh_get(RLEN, rlmap, rid0);
@@ -289,10 +301,22 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
     seq0 = get_read_seq_mmap_ptr(seq_p, rid0, rlmap);
     qsort(v->a, v->n, sizeof(ovlp_candidate_t), ovlp_comp_left);
     uint32_t ovlp_count=0;
+    int32_t last_d_left = -1;
+    uint32_t current_rid1 = v->a[0].rid1;
     for (uint32_t i = 0; i < v->n; i++) {
       ovlp_candidate_t c;
       c = v->a[i];
       if (c.d_left <= 0) continue;
+
+      if (c.rid1 != current_rid1) {
+          last_d_left = -1;
+          current_rid1 = c.rid1;
+      }
+
+      if (abs(c.d_left - last_d_left) < 50) {
+          last_d_left = c.d_left;
+          continue;
+      }
 
       k = kh_get(MRID, mrid, c.rid1);
       if (k != kh_end(mrid)) continue;
@@ -300,7 +324,12 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
       k = kh_get(RLEN, rlmap, c.rid1);
       assert(k != kh_end(rlmap));
       rlen1 = kh_val(rlmap, k).len;
+
+      //DEBUG
+      //printf("DEBUG:1 rid0, rid1= %d %d %d\n", c.rid0, c.rid1, c.d_left);
+      //DEBUG END
       
+      last_d_left = c.d_left;
       seq1 = get_read_seq_mmap_ptr(seq_p, c.rid1, rlmap);
       match = match_seqs(seq0, seq1, 
                          c.d_left,
@@ -319,6 +348,23 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
       if (c.d_right > 2500) ovlp_count++;
       double err_est;
       err_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size);
+      //DEBUG
+      /*
+      printf("DEBUG:1 matched rid0, rid1= %d %d %d\n", c.rid0, c.rid1, c.d_left);
+      printf( "%d %d %d %d %d %d %d %d %d %d %0.2f\n",
+             c.rid0,
+             c.rid1,
+             c.strand1,
+             c.len0,
+             c.d_left,
+             c.d_right,
+             c.d_left + q_bgn,
+             c.d_left + q_end,
+             t_bgn,
+             t_end,
+             err_est);
+      //DEBUG END
+      */
       fprintf(ovlp_file,
              "%d %d %d %d %d %d %d %d %d %d %0.2f\n",
              c.rid0,
@@ -341,10 +387,22 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
     }
     qsort(v->a, v->n, sizeof(ovlp_candidate_t), ovlp_comp_right);
     ovlp_count=0;
+    int32_t last_d_right = 1;
+    current_rid1 = v->a[0].rid1;
     for (uint32_t i = 0; i < v->n; i++) {
       ovlp_candidate_t c;
       c = v->a[i];
       if (c.d_right >= 0) continue;
+      
+      if (c.rid1 != current_rid1) {
+          last_d_right = 1;
+          current_rid1 = c.rid1;
+      }
+
+      if (abs(c.d_right - last_d_right) < 50) {
+          last_d_right = c.d_right;
+          continue;
+      }
 
       k = kh_get(MRID, mrid, c.rid1);
       if (k != kh_end(mrid)) continue;
@@ -353,6 +411,11 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
       assert(k != kh_end(rlmap));
       rlen1 = kh_val(rlmap, k).len;
 
+      //DEBUG
+      //printf("DEBUG:2 rid0, rid1= %d %d %d\n", c.rid0, c.rid1, c.d_right);
+      //DEBUG END
+
+      last_d_right = c.d_right;
       seq1 = get_read_seq_mmap_ptr(seq_p, c.rid1, rlmap);
       
       k = kh_get(RLEN, rlmap, c.rid1);
@@ -362,6 +425,14 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
                          c.d_left,
                          rlen0, rlen1, 
                          c.strand1);
+      //DEBUG
+      //if (c.rid0 == 1339 && c.rid1 == 1217) {
+      //  printf("DEBUG:3 rid0, rid1= %d %d\n", c.rid0, c.rid1);
+      //  printf("d_left, rlen0, rlen1, c.strnd1= %d %d %d %d\n", c.d_left, rlen0, rlen1, c.strand1);
+      //  printf("%d %d %d %d\n", q_bgn, q_end, t_bgn, t_end);
+      //}
+      //DEBUG END
+
       if (check_match(match, rlen0, rlen1 - abs(c.d_left)) == false) {
           free_ovlp_match(match);
           continue;
@@ -473,14 +544,13 @@ void build_ovlp_candidates(mm128_v *mmers,
         if (rid0 == rid1) {
             continue;
         }
-        if (get_rid_pair_count(rid_pairs, rid0, rid1) > 0) continue;
+        //if (get_rid_pair_count(rid_pairs, rid0, rid1) > 0) continue;
 
         k = kh_get(RLEN, rlmap, rid0);
         assert(k != kh_end(rlmap));
         rlen0 = kh_val(rlmap, k).len;
 
         pos0 = (uint32_t)((y0 & 0xFFFFFFFF) >> 1) + 1;
-        strand0 = mpv->a[__k0].direction;
 
         candidate.rid0 = rid0;
         candidate.rid1 = rid1;
@@ -511,14 +581,14 @@ void build_ovlp_candidates(mm128_v *mmers,
         if (rid0 == rid1) {
           continue;
         }
-        if (get_rid_pair_count(rid_pairs, rid0, rid1) > 0) continue;
+        //if (get_rid_pair_count(rid_pairs, rid0, rid1) > 0) continue;
 
         k = kh_get(RLEN, rlmap, rid0);
         assert(k != kh_end(rlmap));
         rlen0 = kh_val(rlmap, k).len;
 
         pos0 = (uint32_t)((y0 & 0xFFFFFFFF) >> 1) + 1;
-      
+        
         candidate.rid0 = rid0;
         candidate.rid1 = rid1;
         candidate.strand1 = strand1;
