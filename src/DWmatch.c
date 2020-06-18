@@ -315,6 +315,8 @@ ovlp_match_t *ovlp_match(uint8_t *query_seq, seq_coor_t q_len, uint8_t q_strand,
   if (matched == false) {
     rtn->q_bgn = 0;
     rtn->t_bgn = 0;
+    rtn->m_size = 0;
+    rtn->dist = 1;
   }
 
   free_seq(qseq);
