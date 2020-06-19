@@ -104,7 +104,7 @@ void build_map2(mm128_v *mmers, khash_t(MMER0) * mmer0_map,
     }
 
     //DEBUG
-    //if ((mmer1.y >> 32) == 985) {
+    //if ((mmer1.y >> 32) == 2130) {
     //   printf("DEBUG mmcount: %d %d %d\n", mmer1.y >> 32, ((mmer1.y >> 1) & 0xFFFFFFF), mcount);
     //}
     //DEBUG END
@@ -184,6 +184,69 @@ void increase_rid_pair_count(khash_t(RPAIR) *rid_pairs,
   }
 }
 
+// get precise d_left from an estimation
+#define ALNW 200
+#define ALNH 24
+int32_t update_d_left(uint8_t * seq0, uint8_t * seq1, 
+                          int32_t d_left, 
+                          uint32_t rlen0, uint32_t rlen1,
+                          uint32_t strand1) {
+    int32_t score[ALNW+1][ALNH+1];
+    memset(score, 0, (ALNW+1)*(ALNH+1)*sizeof(int32_t));
+    uint32_t xs, xe;
+    if (d_left >= 0) {
+      xs = d_left - (ALNW>>1) > 0 ? d_left - (ALNW>>1) : 0;
+      xe = d_left + (ALNW>>1) < rlen0 ? d_left + (ALNW>>1) : rlen0;
+    } else {
+      xs = abs(d_left) - (ALNW>>1) > 0 ? abs(d_left) - (ALNW>>1) : 0;
+      xe = abs(d_left) + (ALNW>>1) < rlen1 ? abs(d_left) + (ALNW>>1) : rlen1;
+    }
+    uint32_t max_x = 0;
+    uint32_t max_y = 0;
+    int32_t max_s = 0;
+    for (int32_t y = ALNH - 1 ; y >= 0; y--) {
+      for (int32_t x = xe - xs - 1; x >= 0; x--) {
+        uint8_t b0, b1;  
+        if (d_left > 0) {
+          b0 = seq0[x+xs] & 0x0F;
+          b1 = strand1 == 0 ? seq1[y] : seq1[y] >> 4;
+          b1 &= 0x0F; 
+        } else {
+          b0 = seq0[y] & 0x0F;
+          b1 = strand1 == 0 ? seq1[x+xs] : seq1[x+xs] >> 4;
+          b1 &= 0x0F; 
+        }
+            
+        int32_t s0, sd, sy, sx;
+        s0 = b0 == b1 ? 2 : -4;
+        sy = score[x][y+1] - 4;
+        sd = s0 + score[x+1][y+1];
+        sx = score[x+1][y] - 4; 
+        if (sd > sx && sd > sy) {
+           score[x][y] = sd;
+        } else if (sx > sy) {
+           score[x][y] = sx;
+        } else {
+           score[x][y] = sy;
+        }
+        if (score[x][y] > max_s) {
+          max_s = score[x][y];
+          max_x = x;
+          max_y = y; 
+        } 
+      }
+   }
+  if (max_y < 2 && max_s >= (ALNH-2) * 2) {
+      if (d_left > 0) {
+          return xs + max_x;
+      } else {
+          return -xs-max_x;
+      }
+  } else {
+      return 0;
+  }
+}
+
 ovlp_match_t * match_seqs(uint8_t * seq0, uint8_t * seq1, 
                           int32_t d_left, 
                           uint32_t rlen0, uint32_t rlen1,
@@ -254,8 +317,8 @@ bool check_match(ovlp_match_t *match, uint32_t slen0, uint32_t slen1) {
   double err_est;
   if (match->m_size == 0) return false;
   err_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size+1);
-  //printf("DEBUG: check_match: %d %d %d %d %d %d %f\n", q_bgn, q_end, slen0, t_bgn, t_end, slen1, err_est);
-  if (err_est < 99.8) return false;;
+  // printf("DEBUG: check_match: %d %d %d %d %d %d %f\n", q_bgn, q_end, slen0, t_bgn, t_end, slen1, err_est);
+  if (err_est < 99.5) return false;;
   if (q_end < 500 || t_end < 500)  return false;
 
   if (q_bgn > READ_END_FUZZINESS || t_bgn > READ_END_FUZZINESS) return false; 
@@ -313,11 +376,6 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
           current_rid1 = c.rid1;
       }
 
-      if (abs(c.d_left - last_d_left) < 50) {
-          last_d_left = c.d_left;
-          continue;
-      }
-
       k = kh_get(MRID, mrid, c.rid1);
       if (k != kh_end(mrid)) continue;
 
@@ -325,12 +383,27 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
       assert(k != kh_end(rlmap));
       rlen1 = kh_val(rlmap, k).len;
 
+      seq1 = get_read_seq_mmap_ptr(seq_p, c.rid1, rlmap);
+
+      c.d_left = update_d_left(seq0, seq1, 
+                         c.d_left,
+                         rlen0, rlen1, 
+                         c.strand1);
+
+      if (c.d_left == 0) continue;
+
+      if (abs(c.d_left - last_d_left) < 24) {
+          last_d_left = c.d_left;
+          continue;
+      }
+
       //DEBUG
-      //printf("DEBUG:1 rid0, rid1= %d %d %d\n", c.rid0, c.rid1, c.d_left);
+      // printf("DEBUG:1 rid0, rid1= %d %d %d\n", c.rid0, c.rid1, c.d_left);
       //DEBUG END
       
       last_d_left = c.d_left;
-      seq1 = get_read_seq_mmap_ptr(seq_p, c.rid1, rlmap);
+      
+
       match = match_seqs(seq0, seq1, 
                          c.d_left,
                          rlen0, rlen1, 
@@ -348,6 +421,7 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
       if (c.d_right > 2500) ovlp_count++;
       double err_est;
       err_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size);
+      
       //DEBUG
       /*
       printf("DEBUG:1 matched rid0, rid1= %d %d %d\n", c.rid0, c.rid1, c.d_left);
@@ -363,8 +437,10 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
              t_bgn,
              t_end,
              err_est);
-      //DEBUG END
+      printf("\n");
       */
+      //DEBUG END
+      
       fprintf(ovlp_file,
              "%d %d %d %d %d %d %d %d %d %d %0.2f\n",
              c.rid0,
@@ -399,10 +475,6 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
           current_rid1 = c.rid1;
       }
 
-      if (abs(c.d_right - last_d_right) < 50) {
-          last_d_right = c.d_right;
-          continue;
-      }
 
       k = kh_get(MRID, mrid, c.rid1);
       if (k != kh_end(mrid)) continue;
@@ -411,16 +483,28 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
       assert(k != kh_end(rlmap));
       rlen1 = kh_val(rlmap, k).len;
 
+      seq1 = get_read_seq_mmap_ptr(seq_p, c.rid1, rlmap);
+      uint32_t tmp;
+      tmp = c.d_left;
+      c.d_left = update_d_left(seq0, seq1, 
+                         c.d_left,
+                         rlen0, rlen1, 
+                         c.strand1);
+
+      if (c.d_left == 0) continue;
+
+      c.d_right += c.d_left - tmp;
+
+      if (abs(c.d_right - last_d_right) < 24) {
+          last_d_right = c.d_right;
+          continue;
+      }
       //DEBUG
       //printf("DEBUG:2 rid0, rid1= %d %d %d\n", c.rid0, c.rid1, c.d_right);
       //DEBUG END
 
       last_d_right = c.d_right;
-      seq1 = get_read_seq_mmap_ptr(seq_p, c.rid1, rlmap);
       
-      k = kh_get(RLEN, rlmap, c.rid1);
-      assert(k != kh_end(rlmap));
-      rlen1 = kh_val(rlmap, k).len;
       match = match_seqs(seq0, seq1, 
                          c.d_left,
                          rlen0, rlen1, 
