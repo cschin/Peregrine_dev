@@ -634,8 +634,7 @@ void build_ovlp_candidates(mm128_v *mmers,
                uint32_t total_chunk, 
                uint32_t lowerbound, 
                uint32_t upperbound,
-               khash_t(OVLP_CANDIDATES) * ovlp_candidates,
-               khash_t(RPAIR) *rid_pairs) {
+               khash_t(OVLP_CANDIDATES) * ovlp_candidates) {
   uint64_t mhash;
   mm128_t mmer0, mmer1;
   mp128_v *mpv;
@@ -653,6 +652,7 @@ void build_ovlp_candidates(mm128_v *mmers,
   ovlp_match_t *match;
   ovlp_candidate_t candidate;
   khash_t(OVLP_CANDIDATES) * ovlp_tmp = kh_init(OVLP_CANDIDATES);
+  khash_t(RPAIR) *rid_pairs = kh_init(RPAIR);
 
   for (;;) {
     if (s >= mmers->n) break;
@@ -688,6 +688,9 @@ void build_ovlp_candidates(mm128_v *mmers,
       }
       kh_destroy(OVLP_CANDIDATES, ovlp_tmp);
       ovlp_tmp = kh_init(OVLP_CANDIDATES);
+
+      kh_destroy(RPAIR, rid_pairs);
+      rid_pairs = kh_init(RPAIR);
       mmer0 = mmer1;
       continue;
     }
@@ -782,6 +785,7 @@ void build_ovlp_candidates(mm128_v *mmers,
     kv_destroy(*v);
   }
   kh_destroy(OVLP_CANDIDATES, ovlp_tmp);
+  kh_destroy(RPAIR, rid_pairs);
 }
 
 
@@ -985,12 +989,10 @@ int main(int argc, char *argv[]) {
     handle_error("fstat");
 
   khash_t(OVLP_CANDIDATES) * ovlp_candidates = kh_init(OVLP_CANDIDATES);
-  khash_t(RPAIR) *rid_pairs = kh_init(RPAIR);
   build_ovlp_candidates(&mmers, mmer0_map, rlmap, mcmap, 
                         mychunk, total_chunk, 
                         mc_lower, mc_upper, 
-                        ovlp_candidates,
-                        rid_pairs);
+                        ovlp_candidates);
   for (khiter_t __i = kh_begin(mmer0_map); __i != kh_end(mmer0_map); ++__i) {
     if (!kh_exist(mmer0_map, __i)) continue;
     mmer1_map = kh_val(mmer0_map, __i);
@@ -1012,7 +1014,6 @@ int main(int argc, char *argv[]) {
   }
   */
 
-  kh_destroy(RPAIR, rid_pairs);
   kh_destroy(MMC, mcmap);
   kv_destroy(mmers);
 
