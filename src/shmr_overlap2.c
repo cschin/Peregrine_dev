@@ -567,6 +567,65 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
   }
 }
 
+void filter_candidates(khash_t(OVLP_CANDIDATES) * in_ovlps,
+        khash_t(OVLP_CANDIDATES) * out_ovlps) {
+  for (khiter_t __i = kh_begin(in_ovlps); 
+         __i != kh_end(in_ovlps); 
+         ++__i) {
+
+    khash_t(MRID) *mrid = kh_init(MRID);
+    int32_t absent;
+    ovlp_candidate_v * v;
+
+    if (!kh_exist(in_ovlps, __i)) continue;
+    v = kh_val(in_ovlps, __i);
+    qsort(v->a, v->n, sizeof(ovlp_candidate_t), ovlp_comp_rid);
+    uint32_t ovlp_count=0;
+    int32_t last_d_left = -1;
+    uint32_t current_rid1 = v->a[0].rid1;
+    uint32_t cluster_count = 0;
+    ovlp_candidate_t c;
+    ovlp_candidate_t last_c;
+    for (uint32_t i = 0; i < v->n; i++) {
+      c = v->a[i];
+      if (last_d_left == -1 || current_rid1 != c.rid1) {
+          last_d_left = c.d_left;
+          if (cluster_count > 3) {
+            push_ovlp_candidate(out_ovlps, &last_c);
+          }
+          cluster_count = 0;
+          current_rid1 = c.rid1;
+          last_c = c;
+      }
+      if (c.d_left < last_d_left + 72) {
+        cluster_count++;
+      } else {
+        if (cluster_count > 3) {
+          push_ovlp_candidate(out_ovlps, &last_c);
+        }
+        cluster_count = 1;
+        last_d_left = c.d_left;
+      }
+      //DEBUG
+      /*
+      printf( "%d %d %d %d %d %d %d\n",
+              c.rid0,
+              c.rid1,
+              c.strand1,
+              c.len0,
+              c.d_left,
+              c.d_right,
+              cluster_count);
+      */
+      last_c = c;
+    }
+    if (cluster_count > 3) {
+      push_ovlp_candidate(out_ovlps, &last_c);
+    }
+  }
+}
+
+
 void build_ovlp_candidates(mm128_v *mmers, 
                khash_t(MMER0) * mmer0_map,
                khash_t(RLEN) * rlmap, 
@@ -700,62 +759,15 @@ void build_ovlp_candidates(mm128_v *mmers,
     }
     mmer0 = mmer1;
   }
+
+  filter_candidates(ovlp_candidates_, ovlp_candidates);
+
   for (khiter_t __i = kh_begin(ovlp_candidates_); 
          __i != kh_end(ovlp_candidates_); 
          ++__i) {
-
-    khash_t(MRID) *mrid = kh_init(MRID);
-    int32_t absent;
     ovlp_candidate_v * v;
-
     if (!kh_exist(ovlp_candidates_, __i)) continue;
     v = kh_val(ovlp_candidates_, __i);
-    qsort(v->a, v->n, sizeof(ovlp_candidate_t), ovlp_comp_rid);
-    uint32_t ovlp_count=0;
-    int32_t last_d_left = -1;
-    uint32_t current_rid1 = v->a[0].rid1;
-    uint32_t cluster_count = 0;
-    ovlp_candidate_t c;
-    ovlp_candidate_t last_c;
-    for (uint32_t i = 0; i < v->n; i++) {
-      c = v->a[i];
-      //khiter_t k;
-      //k = kh_get(RPAIR, rid_pairs, (((uint64_t) c.rid0) << 32) | ((uint64_t) c.rid1));
-      uint32_t count = kh_val(rid_pairs, k);
-      if (last_d_left == -1 || current_rid1 != c.rid1) {
-          last_d_left = c.d_left;
-          if (cluster_count > 3) {
-            push_ovlp_candidate(ovlp_candidates, &last_c);
-          }
-          cluster_count = 0;
-          current_rid1 = c.rid1;
-          last_c = c;
-      }
-      if (c.d_left < last_d_left + 72) {
-        cluster_count++;
-      } else {
-        if (cluster_count > 3) {
-          push_ovlp_candidate(ovlp_candidates, &last_c);
-        }
-        cluster_count = 1;
-        last_d_left = c.d_left;
-      }
-      //DEBUG
-      /*
-      printf( "%d %d %d %d %d %d %d\n",
-              c.rid0,
-              c.rid1,
-              c.strand1,
-              c.len0,
-              c.d_left,
-              c.d_right,
-              cluster_count);
-      */
-      last_c = c;
-    }
-    if (cluster_count > 3) {
-      push_ovlp_candidate(ovlp_candidates, &last_c);
-    }
     kv_destroy(*v);
   }
   kh_destroy(OVLP_CANDIDATES, ovlp_candidates_);
