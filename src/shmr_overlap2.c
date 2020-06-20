@@ -389,6 +389,8 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
 
       seq1 = get_read_seq_mmap_ptr(seq_p, c.rid1, rlmap);
 
+      uint32_t tmp;
+      tmp = c.d_left;
       c.d_left = update_d_left(seq0, seq1, 
                          c.d_left,
                          rlen0, rlen1, 
@@ -398,6 +400,8 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
 
       k = kh_get(MRID, mrid, (((uint64_t) c.rid1) << 32 | ((uint64_t) c.d_left)));
       if (k != kh_end(mrid)) continue;
+
+      c.d_right += c.d_left - tmp;
 
       //if (abs(c.d_left - last_d_left) < 24) {
       //    last_d_left = c.d_left;
@@ -639,7 +643,7 @@ void build_ovlp_candidates(mm128_v *mmers,
         if (rid0 == rid1) {
             continue;
         }
-        //if (get_rid_pair_count(rid_pairs, rid0, rid1) > 0) continue;
+        if (get_rid_pair_count(rid_pairs, rid0, rid1) > 12) continue;
 
         k = kh_get(RLEN, rlmap, rid0);
         assert(k != kh_end(rlmap));
@@ -658,7 +662,7 @@ void build_ovlp_candidates(mm128_v *mmers,
       }
     }
 
-    // reverse
+    // revers
     mpv = match_shimmer_pair(mmer0_map, mmer1, mmer0);
     if (mpv != NULL) {
       rid1 = (uint32_t)(mmer1.y >> 32);
@@ -676,7 +680,7 @@ void build_ovlp_candidates(mm128_v *mmers,
         if (rid0 == rid1) {
           continue;
         }
-        //if (get_rid_pair_count(rid_pairs, rid0, rid1) > 0) continue;
+        if (get_rid_pair_count(rid_pairs, rid0, rid1) > 12) continue;
 
         k = kh_get(RLEN, rlmap, rid0);
         assert(k != kh_end(rlmap));
@@ -715,8 +719,8 @@ void build_ovlp_candidates(mm128_v *mmers,
     ovlp_candidate_t last_c;
     for (uint32_t i = 0; i < v->n; i++) {
       c = v->a[i];
-      khiter_t k;
-      k = kh_get(RPAIR, rid_pairs, (((uint64_t) c.rid0) << 32) | ((uint64_t) c.rid1));
+      //khiter_t k;
+      //k = kh_get(RPAIR, rid_pairs, (((uint64_t) c.rid0) << 32) | ((uint64_t) c.rid1));
       uint32_t count = kh_val(rid_pairs, k);
       if (last_d_left == -1 || current_rid1 != c.rid1) {
           last_d_left = c.d_left;
@@ -752,6 +756,7 @@ void build_ovlp_candidates(mm128_v *mmers,
     if (cluster_count > 3) {
       push_ovlp_candidate(ovlp_candidates, &last_c);
     }
+    kv_destroy(*v);
   }
   kh_destroy(OVLP_CANDIDATES, ovlp_candidates_);
 }
