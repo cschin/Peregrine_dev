@@ -652,7 +652,7 @@ void build_ovlp_candidates(mm128_v *mmers,
   // uint8_t *seq1 = NULL;
   ovlp_match_t *match;
   ovlp_candidate_t candidate;
-  khash_t(OVLP_CANDIDATES) * ovlp_candidates_ = kh_init(OVLP_CANDIDATES);
+  khash_t(OVLP_CANDIDATES) * ovlp_tmp = kh_init(OVLP_CANDIDATES);
 
   for (;;) {
     if (s >= mmers->n) break;
@@ -677,8 +677,19 @@ void build_ovlp_candidates(mm128_v *mmers,
     if (mcount < lowerbound || mcount > upperbound) continue;
 
     if ((mmer0.y >> 32) != (mmer1.y >> 32)) {  // the pairs are in the same read
-       mmer0 = mmer1;
-       continue;
+      filter_candidates(ovlp_tmp, ovlp_candidates);
+      for (khiter_t __i = kh_begin(ovlp_tmp); 
+           __i != kh_end(ovlp_tmp); 
+           ++__i) {
+        ovlp_candidate_v * v;
+        if (!kh_exist(ovlp_tmp, __i)) continue;
+        v = kh_val(ovlp_tmp, __i);
+        kv_destroy(*v);
+      }
+      kh_destroy(OVLP_CANDIDATES, ovlp_tmp);
+      ovlp_tmp = kh_init(OVLP_CANDIDATES);
+      mmer0 = mmer1;
+      continue;
     }
 
       // don't use two minimers that are too close to each other
@@ -716,7 +727,7 @@ void build_ovlp_candidates(mm128_v *mmers,
         candidate.len0 = rlen0;
         candidate.d_left = (int32_t) pos0 - (int32_t) pos1;
         candidate.d_right = (int32_t) pos0 - (int32_t) pos1 + (int32_t) rlen1 - (int32_t) rlen0;
-        push_ovlp_candidate(ovlp_candidates_, &candidate);
+        push_ovlp_candidate(ovlp_tmp, &candidate);
         increase_rid_pair_count(rid_pairs, rid0, rid1);
       }
     }
@@ -753,24 +764,24 @@ void build_ovlp_candidates(mm128_v *mmers,
         candidate.len0 = rlen0;
         candidate.d_left = (int32_t) pos0 - (int32_t) pos1;
         candidate.d_right = (int32_t) pos0 - (int32_t) pos1 + (int32_t) rlen1 - (int32_t) rlen0;
-        push_ovlp_candidate(ovlp_candidates_, &candidate);
+        push_ovlp_candidate(ovlp_tmp, &candidate);
         increase_rid_pair_count(rid_pairs, rid0, rid1);
       }
     }
     mmer0 = mmer1;
   }
 
-  filter_candidates(ovlp_candidates_, ovlp_candidates);
+  filter_candidates(ovlp_tmp, ovlp_candidates);
 
-  for (khiter_t __i = kh_begin(ovlp_candidates_); 
-         __i != kh_end(ovlp_candidates_); 
+  for (khiter_t __i = kh_begin(ovlp_tmp); 
+         __i != kh_end(ovlp_tmp); 
          ++__i) {
     ovlp_candidate_v * v;
-    if (!kh_exist(ovlp_candidates_, __i)) continue;
-    v = kh_val(ovlp_candidates_, __i);
+    if (!kh_exist(ovlp_tmp, __i)) continue;
+    v = kh_val(ovlp_tmp, __i);
     kv_destroy(*v);
   }
-  kh_destroy(OVLP_CANDIDATES, ovlp_candidates_);
+  kh_destroy(OVLP_CANDIDATES, ovlp_tmp);
 }
 
 
