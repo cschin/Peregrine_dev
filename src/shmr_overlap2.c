@@ -170,11 +170,16 @@ uint32_t get_rid_pair_count(khash_t(RPAIR) *rid_pairs,
 
 void increase_rid_pair_count(khash_t(RPAIR) *rid_pairs,
                   uint32_t rid0,
-                  uint32_t rid1) {
+                  uint32_t strand0,
+                  uint32_t rid1,
+                  uint32_t strand1) {
   uint64_t ridp;
   int32_t absent;
   khiter_t k;
-  ridp = (((uint64_t)rid0) << 32) | ((uint64_t)rid1);
+  uint32_t r0 = (rid0 << 1) | strand0;
+  uint32_t r1 = (rid1 << 1) | strand1;
+
+  ridp = (((uint64_t)r0) << 32) | ((uint64_t)r1);
   k = kh_get(RPAIR, rid_pairs, ridp);
   if (k == kh_end(rid_pairs)) {
      k = kh_put(RPAIR, rid_pairs, ridp, &absent);
@@ -359,9 +364,9 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
     if (!kh_exist(ovlp_candidates, __i)) continue;
     v = kh_val(ovlp_candidates, __i);
 
-    //if (ovlp_upper != 0) {
-    //   if (v->n > ovlp_upper) continue;
-    //}
+    if (ovlp_upper != 0) {
+       if (v->n > ovlp_upper) continue;
+    }
 
     rid0 = v->a[0].rid0;
     k = kh_get(RLEN, rlmap, rid0);
@@ -731,7 +736,7 @@ void build_ovlp_candidates(mm128_v *mmers,
         candidate.d_left = (int32_t) pos0 - (int32_t) pos1;
         candidate.d_right = (int32_t) pos0 - (int32_t) pos1 + (int32_t) rlen1 - (int32_t) rlen0;
         push_ovlp_candidate(ovlp_tmp, &candidate);
-        increase_rid_pair_count(rid_pairs, rid0, rid1);
+        increase_rid_pair_count(rid_pairs, rid0, 0, rid1, strand1);
       }
     }
 
@@ -768,7 +773,7 @@ void build_ovlp_candidates(mm128_v *mmers,
         candidate.d_left = (int32_t) pos0 - (int32_t) pos1;
         candidate.d_right = (int32_t) pos0 - (int32_t) pos1 + (int32_t) rlen1 - (int32_t) rlen0;
         push_ovlp_candidate(ovlp_tmp, &candidate);
-        increase_rid_pair_count(rid_pairs, rid0, rid1);
+        increase_rid_pair_count(rid_pairs, rid0, 0, rid1, strand1);
       }
     }
     mmer0 = mmer1;
@@ -1005,18 +1010,8 @@ int main(int argc, char *argv[]) {
   }
   kh_destroy(MMER0, mmer0_map);
 
-  /*
-  for (khiter_t __i = kh_begin(rid_pairs); __i != kh_end(rid_pairs); ++__i) {
-    if (!kh_exist(rid_pairs, __i)) continue;
-    uint64_t key = kh_key(rid_pairs, __i);
-    uint32_t count = kh_val(rid_pairs, __i);
-    printf("%d %d %d\n", (uint32_t) ((key>>32) & 0xFFFFFFFF), key & 0xFFFFFFFF, count);
-  }
-  */
-
   kh_destroy(MMC, mcmap);
   kv_destroy(mmers);
-
 
   seq_p = (uint8_t *)mmap((void *)0, sb.st_size, PROT_READ, MAP_SHARED, fd, 0);
   dump_candidates(ovlp_candidates, rlmap, ovlp_upper, bestn, seq_p, ovlp_file);
