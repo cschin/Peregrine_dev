@@ -466,7 +466,7 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
       //DEBUG END
       
       fprintf(ovlp_file,
-             "O %d %d %d %d %d %d %d %d %d %d %0.2f\n",
+             "O %d %d %d %d %d %d %d %d %d %d %d %0.2f\n",
              c.rid0,
              c.rid1,
              c.strand1,
@@ -477,6 +477,7 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
              c.d_left + q_end,
              t_bgn,
              t_end,
+             match->dist,
              err_est);
       fprintf(ovlp_file, "D %d %d %d", c.rid0, c.rid1,  match->dist);
       for (uint32_t idx = 0; idx < match->dist; idx++) {
@@ -561,7 +562,7 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
       double err_est;
       err_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size);
       fprintf(ovlp_file,
-              "O %d %d %d %d %d %d %d %d %d %d %0.2f\n",
+              "O %d %d %d %d %d %d %d %d %d %d %d %0.2f\n",
               c.rid0,
               c.rid1,
               c.strand1,
@@ -572,6 +573,7 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
               q_end,
               abs(c.d_left) + t_bgn,
               abs(c.d_left) + t_end,
+              match->dist,
               err_est);
       fprintf(ovlp_file, "D %d %d %d", c.rid0, c.rid1,  match->dist);
       for (uint32_t idx = 0; idx < match->dist; idx++) {
