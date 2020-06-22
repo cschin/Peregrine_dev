@@ -41,6 +41,12 @@ extern int optind, opterr, optopt;
 #define CONTAINED 2
 #define ALNBANDSIZE 100
 
+ovlp_match_t *ovlp_match2(uint8_t *query_seq, seq_coor_t q_len, uint8_t q_strand,
+                         uint8_t *target_seq, seq_coor_t t_len,
+                         uint8_t t_strand, seq_coor_t band_tolerance,
+                         bool get_deltas,
+                         bool use_hpc);
+
 typedef struct {
     uint32_t rid0, rid1, strand1, len0;
     int32_t d_left, d_right;
@@ -262,14 +268,14 @@ ovlp_match_t * match_seqs(uint8_t * seq0, uint8_t * seq1,
       ovlp_match_t *match;
       uint32_t align_bandwidth = 100;
       if (d_left > 0 ) {
-        match = ovlp_match(seq0 + d_left, rlen0 - d_left, ORIGINAL, 
+        match = ovlp_match2(seq0 + d_left, rlen0 - d_left, ORIGINAL, 
                            seq1, rlen1, strand1, 
-                           align_bandwidth, true);
+                           align_bandwidth, true, true);
       } else {
         d_left = abs(d_left);
-        match = ovlp_match(seq0, rlen0, ORIGINAL, 
+        match = ovlp_match2(seq0, rlen0, ORIGINAL, 
                            seq1 + d_left, rlen1 - d_left, strand1, 
-                           align_bandwidth, true);
+                           align_bandwidth, true,  true);
       }
       return match;
 }
@@ -460,7 +466,7 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
       //DEBUG END
       
       fprintf(ovlp_file,
-             "%d %d %d %d %d %d %d %d %d %d %0.2f\n",
+             "O %d %d %d %d %d %d %d %d %d %d %0.2f\n",
              c.rid0,
              c.rid1,
              c.strand1,
@@ -472,6 +478,12 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
              t_bgn,
              t_end,
              err_est);
+      fprintf(ovlp_file, "D %d %d %d", c.rid0, c.rid1,  match->dist);
+      for (uint32_t idx = 0; idx < match->dist; idx++) {
+        uint32_t val = match->reduce_deltas[idx];
+        fprintf(ovlp_file, " %d %d", c.d_left + (val>>1), val&0x1);
+      }
+      fprintf(ovlp_file, "\n");
       free_ovlp_match(match);
 
       k = kh_put(MRID, mrid, (((uint64_t) c.rid1) << 32 | ((uint64_t) c.d_left)), &absent);
@@ -549,7 +561,7 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
       double err_est;
       err_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size);
       fprintf(ovlp_file,
-              "%d %d %d %d %d %d %d %d %d %d %0.2f\n",
+              "O %d %d %d %d %d %d %d %d %d %d %0.2f\n",
               c.rid0,
               c.rid1,
               c.strand1,
@@ -561,6 +573,12 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
               abs(c.d_left) + t_bgn,
               abs(c.d_left) + t_end,
               err_est);
+      fprintf(ovlp_file, "D %d %d %d", c.rid0, c.rid1,  match->dist);
+      for (uint32_t idx = 0; idx < match->dist; idx++) {
+        uint32_t val = match->reduce_deltas[idx];
+        fprintf(ovlp_file, " %d %d", val>>1, val&0x1);
+      }
+      fprintf(ovlp_file, "\n");
       free_ovlp_match(match);
 
       k = kh_put(MRID, mrid, (((uint64_t) c.rid1) << 32 | ((uint64_t) c.d_left)), &absent);

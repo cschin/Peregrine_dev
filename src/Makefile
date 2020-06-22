@@ -2,12 +2,12 @@
 .PHONY:all clean install 
 
 CC=gcc
-CFLAGS=-O3 
+CFLAGS=-O3 -g
 #CFLAGS+=-Wall -Wno-unused-result -Wno-unused-function -Werror -Werror=unused-but-set-variable
 CFLAGS+=-Wall 
 LDLIBS=-lz
 ALL=shmr_mkseqdb shmr_index shmr_gather_mc shmr_overlap shmr_dedup shmr_map shmr_overlap_annotate \
-    shmr_overlap_annotate2 shmr_overlap2
+    shmr_overlap_annotate2 shmr_overlap2 shmr_overlap3
 
 all: $(ALL)
 
@@ -31,6 +31,8 @@ shmr_gather_mc.o: shmr_gather_mc.c
 
 DWmatch.o: DWmatch.c
 
+DWmatch2.o: DWmatch2.c
+
 shmr_mkseqdb: shmr_mkseqdb.c kalloc.o shmr_utils.o
 
 shmr_index: shmr_index.c kalloc.o shmr_reduce.o mm_sketch.o shmr_utils.o shmr_end_filter.o
@@ -39,7 +41,9 @@ shmr_gather_mc: shmr_gather_mc.o kalloc.o shmr_utils.o
 
 shmr_overlap: shmr_overlap.c shmr_utils.o kalloc.o  DWmatch.o
 
-shmr_overlap2: shmr_overlap2.c shmr_utils.o kalloc.o  DWmatch.o
+shmr_overlap2: shmr_overlap2.c shmr_utils.o kalloc.o  DWmatch2.o
+
+shmr_overlap3: shmr_overlap3.c shmr_utils.o kalloc.o  DWmatch.o
 
 shmr_map: shmr_map.c shmr_utils.o kalloc.o  DWmatch.o
 

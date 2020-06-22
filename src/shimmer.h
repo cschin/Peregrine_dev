@@ -100,6 +100,7 @@ typedef struct {
   seq_coor_t q_bgn, q_end;
   seq_coor_t t_bgn, t_end;
   seq_coor_t t_m_end, q_m_end;
+  uint32_t *reduce_deltas; 
 } ovlp_match_t;
 
 typedef struct {
