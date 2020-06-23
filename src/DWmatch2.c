@@ -284,7 +284,7 @@ ovlp_match_t *ovlp_match2(uint8_t *query_seq, seq_coor_t q_len, uint8_t q_strand
         y++;
       }
 
-      if ((x - x1 > 16) && (start == false)) {
+      if ((x - x1 > 8) && (start == false)) {
         if (use_hpc) {
           rtn->q_bgn = qseq_hc->p[x1];
           rtn->t_bgn = tseq_hc->p[y1];
