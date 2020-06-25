@@ -110,7 +110,7 @@ void build_map2(mm128_v *mmers, khash_t(MMER0) * mmer0_map,
     }
 
     //DEBUG
-    //if ((mmer1.y >> 32) == 2130) {
+    //if ((mmer1.y >> 32) == 1933) {
     //   printf("DEBUG mmcount: %d %d %d\n", mmer1.y >> 32, ((mmer1.y >> 1) & 0xFFFFFFF), mcount);
     //}
     //DEBUG END
@@ -332,10 +332,11 @@ bool check_match(ovlp_match_t *match, uint32_t slen0, uint32_t slen1) {
   t_bgn = match->t_bgn;
   t_end = match->t_end;
   double err_est;
+  //printf("DEBUG: check_match0: %d \n", match->m_size);
   if (match->m_size == 0) return false;
   err_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size+1);
-  // printf("DEBUG: check_match: %d %d %d %d %d %d %f\n", q_bgn, q_end, slen0, t_bgn, t_end, slen1, err_est);
-  if (err_est < 99.5) return false;;
+  //printf("DEBUG: check_match: %d %d %d %d %d %d %f\n", q_bgn, q_end, slen0, t_bgn, t_end, slen1, err_est);
+  if (err_est < 99.0) return false;;
   if (q_end < 500 || t_end < 500)  return false;
 
   if (q_bgn > READ_END_FUZZINESS || t_bgn > READ_END_FUZZINESS) return false; 
@@ -420,7 +421,7 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
       //}
 
       //DEBUG
-      // printf("DEBUG:1 rid0, rid1= %d %d %d\n", c.rid0, c.rid1, c.d_left);
+      //printf("DEBUG:1 rid0, rid1= %d %d %d\n", c.rid0, c.rid1, c.d_left);
       //DEBUG END
       
       last_d_left = c.d_left;
@@ -479,7 +480,7 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
              t_end,
              match->dist,
              err_est);
-      fprintf(ovlp_file, "D %d %d %d", c.rid0, c.rid1,  match->dist);
+      fprintf(ovlp_file, "D %d %d %d %d", c.rid0, c.rid1, c.strand1, match->dist);
       for (uint32_t idx = 0; idx < match->dist; idx++) {
         uint32_t val = match->reduce_deltas[idx];
         fprintf(ovlp_file, " %d %d", c.d_left + (val>>1), val&0x1);
@@ -575,7 +576,7 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
               abs(c.d_left) + t_end,
               match->dist,
               err_est);
-      fprintf(ovlp_file, "D %d %d %d", c.rid0, c.rid1,  match->dist);
+      fprintf(ovlp_file, "D %d %d %d %d", c.rid0, c.rid1, c.strand1, match->dist);
       for (uint32_t idx = 0; idx < match->dist; idx++) {
         uint32_t val = match->reduce_deltas[idx];
         fprintf(ovlp_file, " %d %d", val>>1, val&0x1);
@@ -633,7 +634,7 @@ void filter_candidates(khash_t(OVLP_CANDIDATES) * in_ovlps,
       }
       //DEBUG
       /*
-      printf( "%d %d %d %d %d %d %d\n",
+      printf( "DEBUG f: %d %d %d %d %d %d %d\n",
               c.rid0,
               c.rid1,
               c.strand1,
@@ -641,7 +642,7 @@ void filter_candidates(khash_t(OVLP_CANDIDATES) * in_ovlps,
               c.d_left,
               c.d_right,
               cluster_count);
-      */
+              */
       last_c = c;
     }
     if (cluster_count > 3) {

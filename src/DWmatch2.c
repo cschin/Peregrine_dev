@@ -221,7 +221,7 @@ ovlp_match_t *ovlp_match2(uint8_t *query_seq, seq_coor_t q_len, uint8_t q_strand
 
   //printf("debug: %ld %ld\n", q_len, t_len);
 
-  max_d = (int)(0.0015 * (q_len + t_len));
+  max_d = (int)(0.01 * (q_len < t_len ? q_len : t_len));
 
   band_size = band_tolerance * 2;
 
