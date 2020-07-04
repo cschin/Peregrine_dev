@@ -245,9 +245,9 @@ int32_t update_d_left(uint8_t * seq0, uint8_t * seq1,
           max_x = x;
           max_y = y; 
         } 
-      }
-   }
-  if (max_y < 2 && max_s >= (ALNH-2) * 2) {
+     }
+  }
+  if (max_y < 4 && max_s >= (ALNH-4) * 2) {
       if (d_left > 0) {
           return xs + max_x;
       } else {
@@ -331,12 +331,12 @@ bool check_match(ovlp_match_t *match, uint32_t slen0, uint32_t slen1) {
   q_end = match->q_end;
   t_bgn = match->t_bgn;
   t_end = match->t_end;
-  double err_est;
+  double idt_est;
   //printf("DEBUG: check_match0: %d \n", match->m_size);
   if (match->m_size == 0) return false;
-  err_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size+1);
-  //printf("DEBUG: check_match: %d %d %d %d %d %d %f\n", q_bgn, q_end, slen0, t_bgn, t_end, slen1, err_est);
-  if (err_est < 99.0) return false;;
+  idt_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size+1);
+  //printf("DEBUG: check_match: %d %d %d %d %d %d %f\n", q_bgn, q_end, slen0, t_bgn, t_end, slen1, idt_est);
+  if (idt_est < 99.0) return false;;
   if (q_end < 500 || t_end < 500)  return false;
 
   if (q_bgn > READ_END_FUZZINESS || t_bgn > READ_END_FUZZINESS) return false; 
@@ -394,6 +394,9 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
           current_rid1 = c.rid1;
       }
 
+      //DEBUG
+      //printf("DEBUG:0 rid0, rid1= %d %d %d\n", c.rid0, c.rid1, c.d_left);
+      //DEBUG END
 
       k = kh_get(RLEN, rlmap, c.rid1);
       assert(k != kh_end(rlmap));
@@ -415,17 +418,11 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
 
       c.d_right += c.d_left - tmp;
 
-      //if (abs(c.d_left - last_d_left) < 24) {
-      //    last_d_left = c.d_left;
-      //    continue;
-      //}
-
       //DEBUG
       //printf("DEBUG:1 rid0, rid1= %d %d %d\n", c.rid0, c.rid1, c.d_left);
       //DEBUG END
       
       last_d_left = c.d_left;
-      
 
       match = match_seqs(seq0, seq1, 
                          c.d_left,
@@ -444,8 +441,8 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
       t_end = match->t_end;
 
       if (c.d_right > 2500) ovlp_count++;
-      double err_est;
-      err_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size);
+      double idt_est;
+      idt_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size);
       
       //DEBUG
       /*
@@ -461,7 +458,7 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
              c.d_left + q_end,
              t_bgn,
              t_end,
-             err_est);
+             idt_est);
       printf("\n");
       */
       //DEBUG END
@@ -479,7 +476,7 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
              t_bgn,
              t_end,
              match->dist,
-             err_est);
+             idt_est);
       fprintf(ovlp_file, "D %d %d %d %d", c.rid0, c.rid1, c.strand1, match->dist);
       for (uint32_t idx = 0; idx < match->dist; idx++) {
         uint32_t val = match->reduce_deltas[idx];
@@ -507,6 +504,9 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
           current_rid1 = c.rid1;
       }
 
+      //DEBUG
+      //printf("DEBUG:0.1 rid0, rid1= %d %d %d\n", c.rid0, c.rid1, c.d_left);
+      //DEBUG END
       k = kh_get(RLEN, rlmap, c.rid1);
       assert(k != kh_end(rlmap));
       rlen1 = kh_val(rlmap, k).len;
@@ -519,6 +519,8 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
                          rlen0, rlen1, 
                          c.strand1);
 
+      //printf("DEBUG:0.2 rid0, rid1= %d %d %d\n", c.rid0, c.rid1, c.d_left);
+
       if (c.d_left == 0) continue;
 
       k = kh_get(MRID, mrid, (((uint64_t) c.rid1) << 32 | ((uint64_t) c.d_left)));
@@ -526,10 +528,6 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
 
       c.d_right += c.d_left - tmp;
 
-      //if (abs(c.d_right - last_d_right) < 24) {
-      //    last_d_right = c.d_right;
-      //    continue;
-      //}
       //DEBUG
       //printf("DEBUG:2 rid0, rid1= %d %d %d\n", c.rid0, c.rid1, c.d_right);
       //DEBUG END
@@ -560,8 +558,8 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
       t_bgn = match->t_bgn;
       t_end = match->t_end;
       if (c.d_left < -2500) ovlp_count++;
-      double err_est;
-      err_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size);
+      double idt_est;
+      idt_est = 100.0 - 100.0 * (double)(match->dist) / (double)(match->m_size);
       fprintf(ovlp_file,
               "O %d %d %d %d %d %d %d %d %d %d %d %0.2f\n",
               c.rid0,
@@ -575,7 +573,7 @@ void dump_candidates(khash_t(OVLP_CANDIDATES) * ovlp_candidates,
               abs(c.d_left) + t_bgn,
               abs(c.d_left) + t_end,
               match->dist,
-              err_est);
+              idt_est);
       fprintf(ovlp_file, "D %d %d %d %d", c.rid0, c.rid1, c.strand1, match->dist);
       for (uint32_t idx = 0; idx < match->dist; idx++) {
         uint32_t val = match->reduce_deltas[idx];
@@ -634,7 +632,7 @@ void filter_candidates(khash_t(OVLP_CANDIDATES) * in_ovlps,
       }
       //DEBUG
       /*
-      printf( "DEBUG f: %d %d %d %d %d %d %d\n",
+      printf( "DEBUG f0: %d %d %d %d %d %d %d\n",
               c.rid0,
               c.rid1,
               c.strand1,
@@ -646,7 +644,7 @@ void filter_candidates(khash_t(OVLP_CANDIDATES) * in_ovlps,
       last_c = c;
     }
     if (cluster_count > 3) {
-      push_ovlp_candidate(out_ovlps, &last_c);
+        push_ovlp_candidate(out_ovlps, &last_c);
     }
   }
 }
@@ -761,7 +759,7 @@ void build_ovlp_candidates(mm128_v *mmers,
       }
     }
 
-    // revers
+    // reverse
     mpv = match_shimmer_pair(mmer0_map, mmer1, mmer0);
     if (mpv != NULL) {
       rid1 = (uint32_t)(mmer1.y >> 32);
