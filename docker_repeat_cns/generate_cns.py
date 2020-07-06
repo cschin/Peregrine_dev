@@ -101,6 +101,7 @@ def get_consensus(rids, labels, read_sdb):
                 #c += 1
         #plt.figure()
         #plt.hist(list(read_length.values()), bins=32, range=(10000,15000))
+        print("DEBUG-number of marker-mmers:", len(reads2))
         cns=get_cns_from_reads(list(reads2.values()), sort_reads=False, best_n=1000, levels=1, w=32)
         consensus.append( (len(reads2), cns, reads, reads2))
     consensus.sort(key=lambda x:x[0])
@@ -156,16 +157,22 @@ if __name__ == "__main__":
     rids = np.array(rids)
     print(len(compressed_reads))
     mer, mer2 = get_signature_mers(compressed_reads, kmer_size = kmer_size)
-    v = get_signature_vectors(compressed_reads, mer2, kmer_size = kmer_size)
-    print(v.shape)
-    embedding = umap.UMAP(n_neighbors=20,
-                      min_dist=0.5,
-                      random_state=42,
-                      metric='hamming').fit_transform(v)
+    print("mer2 length:", len(mer2))
+    if len(mer2) == 0: # homogenious sample
+        labels = np.zeros(len(rids))
+    else:
+        v = get_signature_vectors(compressed_reads, mer2, kmer_size = kmer_size)
+        print(v.shape)
+        embedding = umap.UMAP(n_neighbors=20,
+                          min_dist=0.5,
+                          random_state=42,
+                          metric='hamming').fit_transform(v)
 
-    clustering = DBSCAN(eps=1, min_samples=20).fit(embedding)
+        clustering = DBSCAN(eps=1, min_samples=20).fit(embedding)
 
-    labels = clustering.labels_
+        labels = clustering.labels_
+    print(rids, labels)
+
     consensus = get_consensus(rids, labels, read_sdb)
 
     s = sub_ref_sdb.get_subseq_by_rid(0)
