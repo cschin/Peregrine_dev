@@ -187,7 +187,7 @@ ovlp_match_t *ovlp_match(uint8_t *query_seq, seq_coor_t q_len, uint8_t q_strand,
     s0 = qseq->s;
     s1 = tseq->s;
     q_len = qseq->l;
-    t_len = qseq->l;
+    t_len = tseq->l;
   }
 
 
