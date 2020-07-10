@@ -116,7 +116,7 @@ hpc_seq_t * hp_compress(seq_t * seq) {
   cseq->s[0] = c;
   cseq->p[0] = 0;
   size_t i = 0;
-  while (i < seq->l) {
+  while (i < seq->l - 1) {
     i ++;
     if (i < seq->l - 1 && i > 1 && seq->s[i-2] == seq->s[i] && seq->s[i-1] == seq->s[i+1]){
         i++;

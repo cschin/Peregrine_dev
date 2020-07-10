@@ -128,7 +128,7 @@ hpc_seq_t * hp_compress(seq_t * seq) {
   cseq->s[0] = c;
   cseq->p[0] = 0;
   size_t i = 0;
-  while (i < seq->l) {
+  while (i < seq->l - 1) {
     i ++;
     if (i < seq->l - 1 && i > 1 && seq->s[i-2] == seq->s[i] && seq->s[i-1] == seq->s[i+1]){
         i++;
@@ -378,10 +378,13 @@ ovlp_match_t *ovlp_match2(uint8_t *query_seq, seq_coor_t q_len, uint8_t q_strand
             }
 
           } else {
+            uint32_t xx = delta_pt.x;
+            uint32_t yy = delta_pt.y;
+
             if (delta_pt.pre_k - kk > 0) {
-              rtn->reduce_deltas[dd-1] = (x << 1); 
+              rtn->reduce_deltas[dd-1] = (xx << 1); 
             } else {
-              rtn->reduce_deltas[dd-1] = (x << 1) | 0x1; 
+              rtn->reduce_deltas[dd-1] = (xx << 1) | 0x1; 
             }
           }
           dd--;
