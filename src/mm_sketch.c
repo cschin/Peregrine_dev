@@ -69,13 +69,13 @@ static inline int tq_shift(tiny_queue_t *q) {
  */
 void mm_sketch(void *km, const char *str, int len, int w, int k, uint32_t rid,
                int is_hpc, mm128_v *p) {
-  uint64_t shift1 = 1 * (k - 1), mask = (1ULL << 1 * k) - 1, kmer[4] = {0, 0, 0, 0};
+  uint64_t shift1 = 2 * (k - 1), mask = (1ULL << 2 * k) - 1, kmer[2] = {0, 0};
   int i, j, l, buf_pos, min_pos, kmer_span = 0;
   mm128_t buf[256], min = {UINT64_MAX, UINT64_MAX};
   tiny_queue_t tq;
 
   assert(len > 0 && (w > 0 && w < 256) &&
-         (k > 0 && k <= 56));  // 56 bits for k-mer; could use long k-mers, but
+         (k > 0 && k <= 28));  // 56 bits for k-mer; could use long k-mers, but
                                // 28 enough in practice
   memset(buf, 0xff, w * 16);
   memset(&tq, 0, sizeof(tiny_queue_t));
@@ -99,17 +99,14 @@ void mm_sketch(void *km, const char *str, int len, int w, int k, uint32_t rid,
         if (tq.count > k) kmer_span -= tq_shift(&tq);
       } else
         kmer_span = l + 1 < k ? l + 1 : k;
-      kmer[0] = ((kmer[0] << 1) | (c & 0x1)) & mask;              // forward k-mer
-      kmer[1] = (kmer[1] >> 1) | (((3ULL ^ c) & 0x1) << shift1);  // reverse k-mer
-      
-      kmer[2] = ((kmer[2] << 1) | (c & 0x2) >> 1) & mask;              // forward k-mer 2
-      kmer[3] = (kmer[3] >> 1) | ((((3ULL ^ c) & 0x2)>>1) << shift1);  // reverse k-mer 2
-      if (kmer[0] == kmer[1] && kmer[2] == kmer[3])
+      kmer[0] = (kmer[0] << 2 | c) & mask;              // forward k-mer
+      kmer[1] = (kmer[1] >> 2) | (3ULL ^ c) << shift1;  // reverse k-mer
+      if (kmer[0] == kmer[1])
         continue;  // skip "symmetric k-mers" as we don't know it strand
       z = kmer[0] < kmer[1] ? 0 : 1;  // strand
       ++l;
       if (l >= k && kmer_span < 256) {
-        info.x = hash64(kmer[z] ^ kmer[z+2], mask) << 8 | kmer_span;
+        info.x = hash64(kmer[z], mask) << 8 | kmer_span;
         info.y = (uint64_t)rid << 32 | (uint32_t)i << 1 | z;
       }
     } else

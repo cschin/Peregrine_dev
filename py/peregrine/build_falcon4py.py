@@ -18,7 +18,7 @@ typedef struct {
     seq_coor_t aln_t_e;
     char * q_aln_str;
     char * t_aln_str;
-
+    ...;
 } alignment;
 
 typedef struct {
@@ -29,11 +29,13 @@ typedef struct {
     uint8_t p_delta; // the tag delta of the previous base
     char p_q_base;        // the previous base
     unsigned q_id;
+    ...;
 } align_tag_t;
 
 typedef struct {
     seq_coor_t len;
     align_tag_t * align_tags;
+    ...;
 } align_tags_t;
 
 typedef struct {
@@ -42,11 +44,13 @@ typedef struct {
     seq_coor_t s2;
     seq_coor_t e2;
     long int score;
+    ...;
 } aln_range;
 
 typedef struct {
     char * sequence;
     uint8_t * eqv;
+    ...;
 } consensus_data;
 
 

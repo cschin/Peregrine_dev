@@ -16,6 +16,7 @@ typedef struct {
     seq_coor_t q_bgn, q_end;
     seq_coor_t t_bgn, t_end;
     seq_coor_t t_m_end, q_m_end;
+    ...;
 } ovlp_match_t;
 
 ovlp_match_t * ovlp_match(uint8_t * query_seq,
@@ -48,7 +49,9 @@ typedef struct {
     void * mmer0_map;
     void * rlmap;
     void * mcmap;
-    void * ridmm;} py_mmer_t;
+    void * ridmm;
+    ...;
+} py_mmer_t;
 
 void build_shimmer_map4py(py_mmer_t *,
         char *, char *,
@@ -68,6 +71,7 @@ typedef struct { size_t n, m; mm_idx_t *a; } mm_idx_v;
 typedef struct {
         mm_idx_v idx0;
         mm_idx_v idx1;
+        ...;
 } shmr_aln_t;
 
 typedef struct { size_t n, m; shmr_aln_t *a; } shmr_aln_v;
